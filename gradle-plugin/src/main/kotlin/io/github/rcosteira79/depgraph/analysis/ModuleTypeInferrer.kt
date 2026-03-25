@@ -3,7 +3,7 @@ package io.github.rcosteira79.depgraph.analysis
 import io.github.rcosteira79.depgraph.model.ModuleType
 
 object ModuleTypeInferrer {
-    val KNOWN_PLUGIN_IDS: Set<String> =
+    internal val KNOWN_PLUGIN_IDS: Set<String> =
         setOf(
             "com.android.application",
             "com.android.dynamic-feature",
