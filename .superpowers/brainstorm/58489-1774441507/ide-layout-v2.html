@@ -1,0 +1,191 @@
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .ide-window { background: #2b2b2b; border: 1px solid #3c3c3c; border-radius: 8px; overflow: hidden; font-family: -apple-system, sans-serif; font-size: 11px; color: #ccc; max-width: 820px; margin: 0 auto; }
+  .title-bar { background: #3c3f41; padding: 5px 12px; font-size: 11px; color: #bbb; border-bottom: 1px solid #2b2b2b; display: flex; align-items: center; gap: 8px; }
+  .toolbar { background: #3c3f41; border-bottom: 1px solid #2b2b2b; padding: 4px 10px; display: flex; align-items: center; gap: 6px; }
+  .tb-btn { background: #4c5052; border: none; border-radius: 3px; color: #ccc; padding: 3px 10px; font-size: 10px; cursor: pointer; }
+  .tb-btn.primary { background: #365880; color: #7ab5e8; }
+  .tb-btn.active { background: #0d3a5e; color: #4fc3f7; }
+  .tb-sep { width: 1px; height: 18px; background: #555; margin: 0 4px; }
+  .depth-control { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #aaa; margin-left: auto; }
+  .depth-slider { width: 80px; height: 3px; border-radius: 2px; outline: none; }
+  .body { display: flex; height: 400px; }
+
+  /* Explorer */
+  .explorer { width: 195px; flex-shrink: 0; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; overflow: hidden; }
+  .explorer-tabs { display: flex; border-bottom: 1px solid #3c3c3c; }
+  .ex-tab { flex: 1; text-align: center; padding: 5px 4px; font-size: 10px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
+  .ex-tab.active { color: #4fc3f7; border-bottom-color: #4fc3f7; }
+  .ex-search { margin: 6px; background: #3c3c3c; border: none; border-radius: 3px; color: #ccc; padding: 4px 7px; font-size: 10px; width: calc(100% - 12px); outline: none; }
+  .ex-section { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 1px; padding: 6px 8px 2px; }
+  .ex-item { padding: 3px 8px; display: flex; align-items: center; gap: 5px; cursor: pointer; border-left: 2px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ex-item:hover { background: #323232; }
+  .ex-item.selected { background: #0d3a5e; border-left-color: #4fc3f7; }
+  .badge { font-size: 9px; padding: 1px 4px; border-radius: 6px; margin-left: auto; flex-shrink: 0; }
+  .badge.app  { background: #c62828; color: #fff; }
+  .badge.feat { background: #1565c0; color: #fff; }
+  .badge.core { background: #4a148c; color: #fff; }
+  .badge.data { background: #1b5e20; color: #fff; }
+
+  /* Graph */
+  .graph-area { flex: 1; background: #121220; position: relative; overflow: hidden; }
+  svg.edges { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  /* Rectangular nodes */
+  .gnode { position: absolute; width: 88px; height: 28px; border-radius: 5px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; color: white; text-align: center; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 6px; }
+  .gnode.app     { background: #7b1212; border-color: #c62828; box-shadow: 0 0 10px rgba(198,40,40,0.4); }
+  .gnode.feat    { background: #0d3461; border-color: #1565c0; }
+  .gnode.core    { background: #2d0d5e; border-color: #6a1fc2; }
+  .gnode.data    { background: #0d3318; border-color: #2e7d32; }
+  .gnode.focused { outline: 2px solid #f5a623; outline-offset: 2px; box-shadow: 0 0 16px rgba(245,166,35,0.5) !important; }
+  .gnode.dim     { opacity: 0.15; }
+  .annotation { position: absolute; background: rgba(245,166,35,0.1); border: 1px dashed #f5a623; border-radius: 4px; padding: 3px 7px; font-size: 9px; color: #f5a623; pointer-events: none; }
+
+  /* Detail panel */
+  .detail-panel { width: 195px; flex-shrink: 0; border-left: 1px solid #3c3c3c; display: flex; flex-direction: column; }
+  .detail-header { padding: 7px 10px; font-size: 10px; color: #4fc3f7; border-bottom: 1px solid #3c3c3c; font-weight: bold; }
+  .detail-section { padding: 6px 10px; border-bottom: 1px solid #333; }
+  .detail-label { font-size: 9px; color: #666; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .detail-value { font-size: 10px; color: #ccc; }
+  .detail-item { font-size: 10px; color: #aaa; padding: 2px 0; display: flex; align-items: center; gap: 4px; }
+  .detail-item::before { content: "→"; color: #555; font-size: 9px; }
+  .drill-btn { margin: 8px 10px; background: #1565c0; border: none; border-radius: 3px; color: #7ab5e8; padding: 5px 8px; font-size: 10px; cursor: pointer; width: calc(100% - 20px); text-align: center; }
+  .breadcrumb { padding: 5px 10px; font-size: 10px; color: #888; background: #1e1e1e; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 4px; }
+  .breadcrumb span { color: #4fc3f7; cursor: pointer; }
+</style>
+
+<h2>IDE Plugin — Tool Window Layout (v2)</h2>
+<p class="subtitle">Rectangular nodes, edges connect at node borders. <code>:feature-profile</code> is focused at depth 2.</p>
+
+<div style="margin-top: 12px;">
+<div class="ide-window">
+
+  <div class="title-bar">
+    <span>◈</span> <strong>Dependency Graph</strong>
+    <span style="margin-left:auto;font-size:10px;color:#666">Last analysed: just now</span>
+  </div>
+
+  <div class="toolbar">
+    <button class="tb-btn primary">▶ Analyse</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn active">◎ Module Graph</button>
+    <div class="tb-sep"></div>
+    <button class="tb-btn">↺ Reset</button>
+    <button class="tb-btn">⤢ Fit</button>
+    <div class="depth-control">
+      <span>Depth</span>
+      <input type="range" class="depth-slider" min="1" max="5" value="3">
+      <span style="color:#4fc3f7;font-weight:bold;min-width:10px">2</span>
+    </div>
+  </div>
+
+  <div class="breadcrumb"><span>modules</span></div>
+
+  <div class="body">
+
+    <!-- Explorer -->
+    <div class="explorer">
+      <div class="explorer-tabs">
+        <div class="ex-tab active">By Type</div>
+        <div class="ex-tab">By Path</div>
+      </div>
+      <input class="ex-search" placeholder="🔍 Filter…">
+      <div class="ex-section">App (1)</div>
+      <div class="ex-item"><span>▪</span>:app<span class="badge app">app</span></div>
+      <div class="ex-section">Feature (3)</div>
+      <div class="ex-item"><span>▪</span>:feature-auth<span class="badge feat">feat</span></div>
+      <div class="ex-item selected"><span>▪</span>:feature-profile<span class="badge feat">feat</span></div>
+      <div class="ex-item"><span>▪</span>:feature-home<span class="badge feat">feat</span></div>
+      <div class="ex-section">Core (2)</div>
+      <div class="ex-item"><span>▪</span>:core-ui<span class="badge core">core</span></div>
+      <div class="ex-item"><span>▪</span>:core-network<span class="badge core">core</span></div>
+      <div class="ex-section">Data (1)</div>
+      <div class="ex-item"><span>▪</span>:data-user<span class="badge data">data</span></div>
+    </div>
+
+    <!-- Graph — nodes: w=88, h=28, hw=44, hh=14
+         Centers:
+           :app          (104, 24)  → top:10,  left:60
+           :feat-auth    (304, 54)  → top:40,  left:260
+           :feat-profile (220, 92)  → top:78,  left:176  (FOCUSED)
+           :core-ui      (144, 189) → top:175, left:100
+           :core-net     (322, 199) → top:185, left:278
+           :data-user    (152, 309) → top:295, left:108
+
+         Edge border-intersection calculations (hw=44, hh=14):
+           :app→:feat-profile      dx=116,dy=68  ratio=0.586>0.318 → bottom/top
+             start:(128,38)  end:(196,78)
+           :feat-profile→:core-ui  dx=-76,dy=97  ratio=1.276>0.318 → bottom/top  (FOCUSED)
+             start:(209,106) end:(155,175)
+           :feat-profile→:core-net dx=102,dy=107 ratio=1.049>0.318 → bottom/top
+             start:(233,106) end:(309,185)
+           :feat-profile→:data-user dx=-68,dy=217 ratio=3.19>0.318 → bottom/top
+             start:(216,106) end:(156,295)
+           :app→:feat-auth         dx=200,dy=30  ratio=0.15<0.318 → right/left
+             start:(148,31)  end:(260,47)
+    -->
+    <div class="graph-area">
+      <svg class="edges">
+        <defs>
+          <marker id="a-dim" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(255,255,255,0.18)"/>
+          </marker>
+          <marker id="a-rel" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="rgba(255,255,255,0.35)"/>
+          </marker>
+          <marker id="a-lit" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+            <path d="M0,0 L7,3.5 L0,7 Z" fill="#f5a623"/>
+          </marker>
+        </defs>
+        <!-- dimmed: :app → :feat-auth -->
+        <line x1="148" y1="31"  x2="260" y2="47"  stroke="rgba(255,255,255,0.1)" stroke-width="1" marker-end="url(#a-dim)"/>
+        <!-- related: :app → :feat-profile -->
+        <line x1="128" y1="38"  x2="196" y2="78"  stroke="rgba(255,255,255,0.35)" stroke-width="1.3" marker-end="url(#a-rel)"/>
+        <!-- focused/lit: :feat-profile → :core-ui -->
+        <line x1="209" y1="106" x2="155" y2="175" stroke="#f5a623" stroke-width="2" marker-end="url(#a-lit)"/>
+        <!-- related: :feat-profile → :core-net -->
+        <line x1="233" y1="106" x2="309" y2="185" stroke="rgba(255,255,255,0.35)" stroke-width="1.3" marker-end="url(#a-rel)"/>
+        <!-- related: :feat-profile → :data-user -->
+        <line x1="216" y1="106" x2="156" y2="295" stroke="rgba(255,255,255,0.35)" stroke-width="1.3" marker-end="url(#a-rel)"/>
+      </svg>
+
+      <!-- Nodes -->
+      <div class="gnode app  dim"     style="top:10px; left:60px">:app</div>
+      <div class="gnode feat dim"     style="top:40px; left:260px">:feat-auth</div>
+      <div class="gnode feat focused" style="top:78px; left:176px">:feat-profile</div>
+      <div class="gnode core"         style="top:175px;left:100px">:core-ui</div>
+      <div class="gnode core"         style="top:185px;left:278px">:core-net</div>
+      <div class="gnode data"         style="top:295px;left:108px">:data-user</div>
+
+      <div class="annotation" style="top:130px;left:230px">click edge →<br>inspect classes</div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="detail-panel">
+      <div class="detail-header">:feature-profile</div>
+      <div class="detail-section">
+        <div class="detail-label">Type</div>
+        <div class="detail-value">Feature module</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Depends on (3)</div>
+        <div class="detail-item">:core-ui</div>
+        <div class="detail-item">:core-network</div>
+        <div class="detail-item">:data-user</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Depended on by (1)</div>
+        <div class="detail-item">:app</div>
+      </div>
+      <div class="detail-section">
+        <div class="detail-label">Fan-in / Fan-out</div>
+        <div class="detail-value">1 / 3</div>
+      </div>
+      <button class="drill-btn">⬇ Drill into module</button>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<p class="subtitle" style="margin-top:10px">Edges now connect exactly at node borders. Rectangular nodes give clean room for full module names.</p>

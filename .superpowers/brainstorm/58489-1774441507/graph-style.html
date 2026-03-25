@@ -1,0 +1,29 @@
+<h2>What kind of "3D" are you imagining for the graph?</h2>
+<p class="subtitle">This shapes the entire rendering approach we'd use.</p>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>True 3D — rotatable space</h3>
+      <p>Nodes float in actual 3D space. You orbit the camera with mouse drag, zoom in/out, and nodes have genuine depth (Z axis). Like a constellation you can spin around. Think Three.js or WebGL.</p>
+      <p style="margin-top:8px;font-size:12px;color:#888;">Most immersive. Higher complexity to implement. Can get disorienting with many nodes.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>2.5D — flat graph with depth effects</h3>
+      <p>A 2D force-directed graph (like D3) but with smooth animations, parallax-style depth on hover, node glow/shadow, and fluid physics when you drag or isolate modules. Looks modern but stays readable.</p>
+      <p style="margin-top:8px;font-size:12px;color:#888;">Much easier to read. Faster to build. Still visually impressive.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Either — I care more about the isolation/navigation UX than the 3D effect</h3>
+      <p>The "pzazz" is nice to have but the killer feature is being able to isolate a module and drill down. Pick whatever's more practical to build well.</p>
+      <p style="margin-top:8px;font-size:12px;color:#888;">Pragmatic. Lets you focus budget on the UX that actually matters.</p>
+    </div>
+  </div>
+</div>
