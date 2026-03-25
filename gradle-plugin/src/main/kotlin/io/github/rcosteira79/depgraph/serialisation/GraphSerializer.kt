@@ -16,7 +16,7 @@ object GraphSerializer {
         graph: GraphModel,
         outputFile: File,
     ) {
-        outputFile.parentFile.mkdirs()
+        outputFile.parentFile?.mkdirs()
         outputFile.writeText(json.encodeToString(graph))
     }
 }

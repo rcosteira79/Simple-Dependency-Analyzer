@@ -1,6 +1,5 @@
 package io.github.rcosteira79.depgraph.serialisation
 
-import io.github.rcosteira79.depgraph.model.Edge
 import io.github.rcosteira79.depgraph.model.GraphModel
 import io.github.rcosteira79.depgraph.model.Module
 import kotlinx.serialization.json.Json
