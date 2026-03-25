@@ -542,13 +542,22 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
-    // Scroll wheel = zoom; middle mouse drag = pan
+    // ctrl+wheel (pinch gesture or ctrl+scroll) = zoom; middle mouse drag = pan
+    // Plain wheel (two-finger trackpad swipe or scroll wheel) = pan — see handler below
     const zoom = d3.zoom()
-      .filter(event => event.type === 'wheel' || event.button === 1)
+      .filter(event => (event.type === 'wheel' && event.ctrlKey) || event.button === 1)
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
+
+    // Two-finger trackpad swipe (and plain scroll wheel) → pan
+    svg.node().addEventListener('wheel', event => {
+      if (event.ctrlKey) return; // pinch zoom handled by D3 above
+      event.preventDefault();
+      const tf = d3.zoomTransform(svg.node());
+      zoom.transform(svg, tf.translate(-event.deltaX / tf.k, -event.deltaY / tf.k));
+    }, { passive: false });
 
     // Prevent middle-click autoscroll cursor
     svg.node().addEventListener('mousedown', event => {
