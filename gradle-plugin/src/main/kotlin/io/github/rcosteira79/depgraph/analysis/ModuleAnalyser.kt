@@ -44,8 +44,11 @@ object ModuleAnalyser {
 
             configuration.dependencies
                 .filterIsInstance<org.gradle.api.artifacts.ProjectDependency>()
-                .filter { dependency -> dependency.dependencyProject.path in projectPaths }
-                .map { dependency ->
+                .filter { dependency ->
+                    @Suppress("DEPRECATION")
+                    dependency.dependencyProject.path in projectPaths
+                }.map { dependency ->
+                    @Suppress("DEPRECATION")
                     Edge(
                         from = path,
                         to = dependency.dependencyProject.path,
