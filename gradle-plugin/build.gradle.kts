@@ -34,6 +34,16 @@ gradlePlugin {
     }
 }
 
+publishing {
+    repositories {
+        // Local repository for testing publication before pushing to the portal
+        maven {
+            name = "local"
+            url = uri(layout.buildDirectory.dir("local-repo"))
+        }
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
 }
