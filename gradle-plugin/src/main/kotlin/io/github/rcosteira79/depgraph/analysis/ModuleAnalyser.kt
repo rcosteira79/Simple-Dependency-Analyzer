@@ -12,9 +12,15 @@ private val EXCLUDED_PROJECTS: Set<String> = setOf("buildSrc")
 
 object ModuleAnalyser {
     fun analyse(rootProject: Project): GraphModel {
-        val allProjects: List<Project> =
-            rootProject.allprojects
-                .filter { it.name !in EXCLUDED_PROJECTS }
+        // For multi-module projects, exclude the root (it's just a container).
+        // For single-module projects, the root IS the module — include it.
+        val candidates: Collection<Project> =
+            if (rootProject.subprojects.isEmpty()) {
+                listOf(rootProject)
+            } else {
+                rootProject.subprojects
+            }
+        val allProjects: List<Project> = candidates.filter { it.name !in EXCLUDED_PROJECTS }
         val projectPaths: Set<String> = allProjects.map { it.path }.toSet()
 
         val modules: List<Module> = allProjects.map { project -> project.toModule() }
