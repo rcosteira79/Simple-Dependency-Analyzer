@@ -4,6 +4,7 @@ import io.github.rcosteira79.depgraph.DependencyGraphExtension
 import io.github.rcosteira79.depgraph.model.Edge
 import io.github.rcosteira79.depgraph.model.GraphModel
 import io.github.rcosteira79.depgraph.model.Module
+import io.github.rcosteira79.depgraph.model.ModuleType
 import org.gradle.api.Project
 
 private val DEPENDENCY_CONFIGURATIONS: Set<String> = setOf("implementation", "api", "compileOnly")
@@ -13,32 +14,23 @@ object ModuleAnalyser {
     fun analyse(rootProject: Project): GraphModel {
         val allProjects: List<Project> =
             rootProject.allprojects
-                .filter { project -> project.name !in EXCLUDED_PROJECTS }
+                .filter { it.name !in EXCLUDED_PROJECTS }
+        val projectPaths: Set<String> = allProjects.map { it.path }.toSet()
 
         val modules: List<Module> = allProjects.map { project -> project.toModule() }
-        val edges: List<Edge> = allProjects.flatMap { project -> project.collectEdges(allProjects) }
+        val edges: List<Edge> = allProjects.flatMap { project -> project.collectEdges(projectPaths) }
 
         return GraphModel(modules = modules, edges = edges)
     }
 
     private fun Project.toModule(): Module {
-        val extension: DependencyGraphExtension? = extensions.findByType(DependencyGraphExtension::class.java)
-        val overriddenType: String? = extension?.moduleType
-
-        val inferredType: io.github.rcosteira79.depgraph.model.ModuleType =
+        val overriddenType: String? = extensions.findByType(DependencyGraphExtension::class.java)?.moduleType
+        val inferredType: ModuleType =
             ModuleTypeInferrer.infer(
-                pluginIds =
-                    buildSet {
-                        if (pluginManager.hasPlugin("com.android.application")) add("com.android.application")
-                        if (pluginManager.hasPlugin("com.android.dynamic-feature")) add("com.android.dynamic-feature")
-                        if (pluginManager.hasPlugin("com.android.library")) add("com.android.library")
-                        if (pluginManager.hasPlugin("java-library")) add("java-library")
-                        if (pluginManager.hasPlugin("org.jetbrains.kotlin.jvm")) add("org.jetbrains.kotlin.jvm")
-                    },
+                pluginIds = appliedKnownPluginIds(),
                 modulePath = path,
                 moduleName = name,
             )
-
         return Module(
             id = path,
             type = overriddenType ?: inferredType.name.lowercase(),
@@ -46,10 +38,8 @@ object ModuleAnalyser {
         )
     }
 
-    private fun Project.collectEdges(allProjects: List<Project>): List<Edge> {
-        val projectPaths: Set<String> = allProjects.map { project -> project.path }.toSet()
-
-        return DEPENDENCY_CONFIGURATIONS.flatMap { configurationName ->
+    private fun Project.collectEdges(projectPaths: Set<String>): List<Edge> =
+        DEPENDENCY_CONFIGURATIONS.flatMap { configurationName ->
             val configuration = configurations.findByName(configurationName) ?: return@flatMap emptyList()
 
             configuration.dependencies
@@ -63,5 +53,9 @@ object ModuleAnalyser {
                     )
                 }
         }
-    }
 }
+
+private fun Project.appliedKnownPluginIds(): Set<String> =
+    ModuleTypeInferrer.KNOWN_PLUGIN_IDS
+        .filter { id -> pluginManager.hasPlugin(id) }
+        .toSet()

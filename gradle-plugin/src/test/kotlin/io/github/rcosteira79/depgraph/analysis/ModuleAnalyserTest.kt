@@ -9,10 +9,11 @@ import org.junit.jupiter.api.Test
 class ModuleAnalyserTest {
     @Test
     fun `analyses single-module project with no edges`() {
-        val rootProject = ProjectBuilder.builder().withName("root").build()
-        rootProject.pluginManager.apply("java-library")
+        val inputRootProject = ProjectBuilder.builder().withName("root").build()
+        // Using java-library instead of com.android.application because AGP is not on the test classpath in ProjectBuilder tests
+        inputRootProject.pluginManager.apply("java-library")
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
 
         assertEquals(1, actualGraph.modules.size)
         assertEquals(":", actualGraph.modules.first().id)
@@ -22,26 +23,26 @@ class ModuleAnalyserTest {
 
     @Test
     fun `collects implementation edge between two subprojects`() {
-        val rootProject = ProjectBuilder.builder().withName("root").build()
-        val appProject =
+        val inputRootProject = ProjectBuilder.builder().withName("root").build()
+        val inputAppProject =
             ProjectBuilder
                 .builder()
                 .withName("app")
-                .withParent(rootProject)
+                .withParent(inputRootProject)
                 .build()
-        val coreProject =
+        val inputCoreProject =
             ProjectBuilder
                 .builder()
                 .withName("core-ui")
-                .withParent(rootProject)
+                .withParent(inputRootProject)
                 .build()
 
-        appProject.pluginManager.apply("java-library")
-        coreProject.pluginManager.apply("java-library")
-        appProject.configurations.maybeCreate("implementation")
-        appProject.dependencies.add("implementation", coreProject)
+        inputAppProject.pluginManager.apply("java-library")
+        inputCoreProject.pluginManager.apply("java-library")
+        inputAppProject.configurations.maybeCreate("implementation")
+        inputAppProject.dependencies.add("implementation", inputCoreProject)
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
 
         val actualEdge = actualGraph.edges.single()
         assertEquals(":app", actualEdge.from)
@@ -51,33 +52,33 @@ class ModuleAnalyserTest {
 
     @Test
     fun `skips buildSrc project`() {
-        val rootProject = ProjectBuilder.builder().withName("root").build()
+        val inputRootProject = ProjectBuilder.builder().withName("root").build()
         ProjectBuilder
             .builder()
             .withName("buildSrc")
-            .withParent(rootProject)
+            .withParent(inputRootProject)
             .build()
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
 
         assertTrue(actualGraph.modules.none { it.id == ":buildSrc" })
     }
 
     @Test
     fun `respects moduleType override from extension`() {
-        val rootProject = ProjectBuilder.builder().withName("root").build()
-        val module =
+        val inputRootProject = ProjectBuilder.builder().withName("root").build()
+        val inputModule =
             ProjectBuilder
                 .builder()
                 .withName("weird-module")
-                .withParent(rootProject)
+                .withParent(inputRootProject)
                 .build()
-        module.pluginManager.apply("java-library")
+        inputModule.pluginManager.apply("java-library")
         // Simulate DSL override
-        module.extensions.create("dependencyGraph", DependencyGraphExtension::class.java)
-        module.extensions.getByType(DependencyGraphExtension::class.java).moduleType = "feature"
+        inputModule.extensions.create("dependencyGraph", DependencyGraphExtension::class.java)
+        inputModule.extensions.getByType(DependencyGraphExtension::class.java).moduleType = "feature"
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
 
         val actualModule = actualGraph.modules.find { it.id == ":weird-module" }!!
         assertEquals("feature", actualModule.type)

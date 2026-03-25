@@ -3,6 +3,15 @@ package io.github.rcosteira79.depgraph.analysis
 import io.github.rcosteira79.depgraph.model.ModuleType
 
 object ModuleTypeInferrer {
+    val KNOWN_PLUGIN_IDS: Set<String> =
+        setOf(
+            "com.android.application",
+            "com.android.dynamic-feature",
+            "com.android.library",
+            "java-library",
+            "org.jetbrains.kotlin.jvm",
+        )
+
     fun infer(
         pluginIds: Set<String>,
         modulePath: String,
