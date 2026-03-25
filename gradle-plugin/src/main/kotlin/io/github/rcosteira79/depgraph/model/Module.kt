@@ -5,6 +5,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class Module(
     val id: String,
-    val type: String,
+    val type: String, // lowercase enum name, e.g. "app", "feature"
     val path: String,
 )
