@@ -20,21 +20,25 @@ object ModuleTypeInferrer {
         }
 
     private fun isFeatureByPath(
-        path: String,
-        name: String,
+        modulePath: String,
+        moduleName: String,
     ): Boolean =
-        path.contains("/feature/") ||
-            path.contains(":feature:") ||
-            name.startsWith("feature-") ||
-            name.startsWith("feature:")
+        modulePath.contains("/feature/") ||
+            modulePath.contains(":feature:") ||
+            moduleName.startsWith("feature-") ||
+            moduleName.startsWith("feature:")
 
+    /**
+     * Returns true if the module's path or name indicates a data module.
+     * Conventions: path segment "data", name prefix "data-"/"data:", name suffix "-data".
+     */
     private fun isDataByPath(
-        path: String,
-        name: String,
+        modulePath: String,
+        moduleName: String,
     ): Boolean =
-        path.contains("/data/") ||
-            path.contains(":data:") ||
-            name.startsWith("data-") ||
-            name.startsWith("data:") ||
-            name.endsWith("-data")
+        modulePath.contains("/data/") ||
+            modulePath.contains(":data:") ||
+            moduleName.startsWith("data-") ||
+            moduleName.startsWith("data:") ||
+            moduleName.endsWith("-data")
 }

@@ -39,7 +39,7 @@ class ModuleTypeInferrerTest {
                     ModuleType.FEATURE,
                 ),
                 Arguments.of(
-                    "path containing /feature/ -> FEATURE",
+                    "path containing :feature: (colon variant) -> FEATURE",
                     setOf("com.android.library"),
                     ":feature:profile",
                     "profile",
@@ -88,6 +88,41 @@ class ModuleTypeInferrerTest {
                     ":feature:app",
                     "app",
                     ModuleType.APP,
+                ),
+                Arguments.of(
+                    "path containing /feature/ (slash variant) -> FEATURE",
+                    setOf("com.android.library"),
+                    ":/feature/profile",
+                    "profile",
+                    ModuleType.FEATURE,
+                ),
+                Arguments.of(
+                    "name starting with feature: -> FEATURE",
+                    setOf("com.android.library"),
+                    ":some-module",
+                    "feature:profile",
+                    ModuleType.FEATURE,
+                ),
+                Arguments.of(
+                    "path containing /data/ (slash variant) -> DATA",
+                    setOf("com.android.library"),
+                    ":/data/user",
+                    "user",
+                    ModuleType.DATA,
+                ),
+                Arguments.of(
+                    "name starting with data: -> DATA",
+                    setOf("com.android.library"),
+                    ":some-module",
+                    "data:user",
+                    ModuleType.DATA,
+                ),
+                Arguments.of(
+                    "name ending with -data -> DATA",
+                    setOf("com.android.library"),
+                    ":some-module",
+                    "network-data",
+                    ModuleType.DATA,
                 ),
             )
     }
