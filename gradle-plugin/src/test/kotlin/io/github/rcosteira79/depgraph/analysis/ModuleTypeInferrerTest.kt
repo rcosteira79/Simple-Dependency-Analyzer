@@ -11,7 +11,7 @@ class ModuleTypeInferrerTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("inferenceTestCases")
     fun `infers module type from plugin ids and path`(
-        description: String,
+        @Suppress("UNUSED_PARAMETER") description: String,
         inputPluginIds: Set<String>,
         inputModulePath: String,
         inputModuleName: String,
