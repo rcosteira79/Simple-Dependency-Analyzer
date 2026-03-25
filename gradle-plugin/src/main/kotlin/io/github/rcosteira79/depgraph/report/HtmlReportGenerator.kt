@@ -7,16 +7,20 @@ import java.io.File
 
 private val json: Json = Json { prettyPrint = false }
 
+private const val VISUALISATION_RESOURCE_NAME: String = "graph-template.js"
+
 object HtmlReportGenerator {
     fun generate(
         graph: GraphModel,
         outputFile: File,
     ) {
         outputFile.parentFile?.mkdirs()
-        val graphDataJson: String = json.encodeToString(graph)
-        val visualisationJs: String = loadResource("graph-template.js")
+        val graphDataJson: String = escapeForScriptBlock(json.encodeToString(graph))
+        val visualisationJs: String = loadResource(VISUALISATION_RESOURCE_NAME)
         outputFile.writeText(buildHtml(graphDataJson, visualisationJs))
     }
+
+    private fun escapeForScriptBlock(json: String): String = json.replace("</", "<\\/")
 
     private fun loadResource(name: String): String =
         HtmlReportGenerator::class.java

@@ -3,6 +3,7 @@ package io.github.rcosteira79.depgraph.report
 import io.github.rcosteira79.depgraph.model.Edge
 import io.github.rcosteira79.depgraph.model.GraphModel
 import io.github.rcosteira79.depgraph.model.Module
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -64,5 +65,24 @@ class HtmlReportGeneratorTest {
         HtmlReportGenerator.generate(inputGraph, outputFile)
 
         assertTrue(outputFile.exists())
+    }
+
+    @Test
+    fun `escapes closing script tags in embedded graph data`(
+        @TempDir tempDir: File,
+    ) {
+        val inputGraphWithBadModuleId =
+            GraphModel(
+                modules = listOf(Module(id = "</script><script>alert(1)", type = "unknown", path = "bad")),
+                edges = emptyList(),
+            )
+        val outputFile = File(tempDir, "index.html")
+        HtmlReportGenerator.generate(inputGraphWithBadModuleId, outputFile)
+
+        val actualHtml = outputFile.readText()
+        assertFalse(
+            actualHtml.contains("</script><script>"),
+            "Unescaped closing script tag must not appear in the script data block",
+        )
     }
 }
