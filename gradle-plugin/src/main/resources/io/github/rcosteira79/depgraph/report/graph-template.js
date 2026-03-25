@@ -4,18 +4,22 @@
 
   // ── Constants ──────────────────────────────────────────────────────────────
   const NODE_W = 140, NODE_H = 32, GAP = 8, FOCUS_GAP = 10;
-  const PORT_SPACING = 14;   // pixels between adjacent ports on the same side
-  const CORNER_R = 6;        // orthogonal bend corner radius
+  const PORT_SPACING = 14;
+  const CORNER_R = 6;
   const LAYER_ORDER = ['app', 'feature', 'core', 'data', 'unknown'];
   const NODE_COLORS  = { app:'#7b1212', feature:'#0d3461', core:'#2d0d5e', data:'#0d3318', unknown:'#2a2a2a' };
   const NODE_BORDERS = { app:'#c62828', feature:'#1565c0', core:'#6a1fc2', data:'#2e7d32', unknown:'#555' };
   const OPPOSITE_SIDE = { bottom:'top', top:'bottom', right:'left', left:'right' };
 
-  let focusedId = null;
+  let focusedId  = null;
   let depthValue = 2;
+  let edgeMode   = 'straight'; // 'straight' | 'orthogonal'
+  let selectedIds = new Set();
 
   // Mutable node positions — initialised from dagre, updated by drag
   const nodePos = {};
+  // Live references to node <g> elements — needed for efficient multi-drag
+  const nodeElements = {};
 
   // ── Layout (dagre) ─────────────────────────────────────────────────────────
   function computeLayout(modules, edges) {
@@ -49,18 +53,33 @@
     return visible;
   }
 
-  // ── Orthogonal routing ─────────────────────────────────────────────────────
+  // ── Straight edge routing ──────────────────────────────────────────────────
+  function nodeEdgePoint(cx, cy, tx, ty, gap) {
+    const dx = tx - cx, dy = ty - cy;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.5) return { x: cx, y: cy };
+    const ux = dx / len, uy = dy / len;
+    const tX = (NODE_W / 2 + gap) / Math.abs(ux || 1e-9);
+    const tY = (NODE_H / 2 + gap) / Math.abs(uy || 1e-9);
+    const t = Math.min(tX, tY);
+    return { x: cx + ux * t, y: cy + uy * t };
+  }
 
-  // Which side of the source node an edge exits from, given source and target centres
+  function buildStraightPath(sp, tp, srcGap, tgtGap) {
+    const src = nodeEdgePoint(sp.x, sp.y, tp.x, tp.y, srcGap);
+    const tgt = nodeEdgePoint(tp.x, tp.y, sp.x, sp.y, tgtGap);
+    return `M ${src.x} ${src.y} L ${tgt.x} ${tgt.y}`;
+  }
+
+  // ── Orthogonal routing ─────────────────────────────────────────────────────
   function exitSide(sp, tp) {
     const dx = tp.x - sp.x, dy = tp.y - sp.y;
     if (Math.abs(dy) >= Math.abs(dx)) return dy >= 0 ? 'bottom' : 'top';
     return dx > 0 ? 'right' : 'left';
   }
 
-  // Compute per-edge port offsets so parallel edges on the same node side are spread out
   function computeEdgePorts(edges) {
-    const sideEntries = {}; // `${nodeId}|${side}` → [{edgeIdx, isSource, otherPos}]
+    const sideEntries = {};
 
     edges.forEach((e, i) => {
       const sp = nodePos[e.from], tp = nodePos[e.to];
@@ -81,7 +100,6 @@
       if (entries.length <= 1) return;
       const side = key.split('|')[1];
       const horizontal = side === 'top' || side === 'bottom';
-      // Sort so adjacent ports go to nearby targets (reduces crossings)
       entries.sort((a, b) => horizontal
         ? a.otherPos.x - b.otherPos.x
         : a.otherPos.y - b.otherPos.y);
@@ -98,7 +116,6 @@
     return portOffset;
   }
 
-  // Build the SVG path string for a single orthogonal edge with rounded corners
   function buildEdgePath(sp, tp, srcOff, tgtOff, srcGap, tgtGap) {
     const hw = NODE_W / 2, hh = NODE_H / 2;
     const side = exitSide(sp, tp);
@@ -122,7 +139,7 @@
       const midX = (p1.x + p4.x) / 2;
       p2 = { x: midX, y: p1.y };
       p3 = { x: midX, y: p4.y };
-    } else { // left
+    } else {
       p1 = { x: sp.x - hw - srcGap, y: sp.y + srcOff };
       p4 = { x: tp.x + hw + tgtGap, y: tp.y + tgtOff };
       const midX = (p1.x + p4.x) / 2;
@@ -133,9 +150,7 @@
     return roundedPolyPath([p1, p2, p3, p4], CORNER_R);
   }
 
-  // Polyline with quadratic-Bezier rounded corners
   function roundedPolyPath(pts, r) {
-    // Drop consecutive duplicates to avoid degenerate segments
     const ps = pts.filter((p, i) =>
       i === 0 || Math.abs(p.x - pts[i-1].x) > 0.5 || Math.abs(p.y - pts[i-1].y) > 0.5);
     if (ps.length < 2) return '';
@@ -157,7 +172,7 @@
   // ── Draw edges ─────────────────────────────────────────────────────────────
   function drawEdges(visibleIds) {
     const { edges } = data;
-    const portOffsets = computeEdgePorts(edges);
+    const portOffsets = edgeMode === 'orthogonal' ? computeEdgePorts(edges) : null;
     const edgeGroup = document.getElementById('edges');
     edgeGroup.innerHTML = '';
 
@@ -168,10 +183,17 @@
       const isVisible = !focusedId || (visibleIds.has(e.from) && visibleIds.has(e.to));
       const srcGap = e.from === focusedId ? FOCUS_GAP : GAP;
       const tgtGap = e.to   === focusedId ? FOCUS_GAP : GAP;
-      const { src: srcOff, tgt: tgtOff } = portOffsets[i];
+
+      let pathD;
+      if (edgeMode === 'orthogonal') {
+        const { src: srcOff, tgt: tgtOff } = portOffsets[i];
+        pathD = buildEdgePath(sp, tp, srcOff, tgtOff, srcGap, tgtGap);
+      } else {
+        pathD = buildStraightPath(sp, tp, srcGap, tgtGap);
+      }
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      path.setAttribute('d', buildEdgePath(sp, tp, srcOff, tgtOff, srcGap, tgtGap));
+      path.setAttribute('d', pathD);
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', isFocusedEdge ? '#f5a623' : 'rgba(255,255,255,0.3)');
       path.setAttribute('stroke-width', isFocusedEdge ? '2' : '1.2');
@@ -194,20 +216,22 @@
     modules.forEach(m => {
       const pos = nodePos[m.id];
       if (!pos) return;
-      const isFocused = m.id === focusedId;
-      const isDim    = focusedId && !visibleIds.has(m.id);
+      const isFocused  = m.id === focusedId;
+      const isSelected = selectedIds.has(m.id);
+      const isDim      = focusedId && !visibleIds.has(m.id);
       const color  = NODE_COLORS[m.type]  || NODE_COLORS.unknown;
       const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+      nodeElements[m.id] = g;
 
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('x', -hw); rect.setAttribute('y', -hh);
       rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
       rect.setAttribute('rx', '5'); rect.setAttribute('fill', color);
-      rect.setAttribute('stroke', isFocused ? '#f5a623' : border);
-      rect.setAttribute('stroke-width', isFocused ? '2.5' : '1');
+      rect.setAttribute('stroke', isFocused ? '#f5a623' : isSelected ? '#4fc3f7' : border);
+      rect.setAttribute('stroke-width', (isFocused || isSelected) ? '2.5' : '1');
       rect.setAttribute('opacity', isDim ? '0.15' : '1');
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -224,21 +248,35 @@
       g.appendChild(text);
       nodeGroup.appendChild(g);
 
-      // D3 drag — distinguishes click (no movement) from drag
+      // Drag: left-button drag on a node moves it (or all selected nodes if part of selection)
       let dragMoved = false;
+      let prevDragPos = null;
+
       const drag = d3.drag()
-        .on('start', function () {
+        .on('start', function (event) {
           dragMoved = false;
+          prevDragPos = { x: event.x, y: event.y };
           d3.select(this).raise();
         })
         .on('drag', function (event) {
           dragMoved = true;
-          nodePos[m.id].x = event.x;
-          nodePos[m.id].y = event.y;
-          d3.select(this).attr('transform', `translate(${event.x},${event.y})`);
+          const dx = event.x - prevDragPos.x;
+          const dy = event.y - prevDragPos.y;
+          prevDragPos = { x: event.x, y: event.y };
+
+          const idsToMove = selectedIds.has(m.id) ? selectedIds : new Set([m.id]);
+          idsToMove.forEach(id => {
+            nodePos[id].x += dx;
+            nodePos[id].y += dy;
+            if (nodeElements[id]) {
+              d3.select(nodeElements[id]).attr('transform', `translate(${nodePos[id].x},${nodePos[id].y})`);
+            }
+          });
+
           drawEdges(getVisibleIds(focusedId, depthValue, data.modules, data.edges));
         })
         .on('end', function () {
+          prevDragPos = null;
           if (!dragMoved) onNodeClick(m.id);
         });
 
@@ -324,12 +362,102 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
+    // Zoom: scroll wheel = zoom in/out; middle mouse drag = pan
     const zoom = d3.zoom()
+      .filter(event => {
+        if (event.type === 'wheel') return true;
+        return event.button === 1; // middle button only for pan
+      })
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
 
+    // Prevent middle-click autoscroll cursor
+    svg.node().addEventListener('mousedown', event => {
+      if (event.button === 1) event.preventDefault();
+    }, { passive: false });
+
+    // ── Rubber-band selection (left mouse drag on background) ─────────────────
+    let lassoStart = null;
+    let lassoEl    = null;
+
+    svg.on('mousedown.lasso', function (event) {
+      if (event.button !== 0) return;
+      // Only start lasso when clicking on the background, not on a node
+      if (document.getElementById('nodes').contains(event.target)) return;
+
+      const tf = d3.zoomTransform(svg.node());
+      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+      lassoStart = { x: mx, y: my };
+
+      lassoEl = content.append('rect')
+        .attr('x', mx).attr('y', my)
+        .attr('width', 0).attr('height', 0)
+        .attr('fill', 'rgba(79,195,247,0.07)')
+        .attr('stroke', '#4fc3f7')
+        .attr('stroke-width', 1)
+        .attr('stroke-dasharray', '4,2')
+        .attr('pointer-events', 'none');
+    });
+
+    svg.on('mousemove.lasso', function (event) {
+      if (!lassoStart) return;
+      const tf = d3.zoomTransform(svg.node());
+      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+      lassoEl
+        .attr('x', Math.min(lassoStart.x, mx))
+        .attr('y', Math.min(lassoStart.y, my))
+        .attr('width',  Math.abs(mx - lassoStart.x))
+        .attr('height', Math.abs(my - lassoStart.y));
+    });
+
+    svg.on('mouseup.lasso', function (event) {
+      if (!lassoStart) return;
+      const tf = d3.zoomTransform(svg.node());
+      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+
+      const wasDrag = Math.abs(mx - lassoStart.x) > 4 || Math.abs(my - lassoStart.y) > 4;
+      if (wasDrag) {
+        const x1 = Math.min(lassoStart.x, mx), x2 = Math.max(lassoStart.x, mx);
+        const y1 = Math.min(lassoStart.y, my), y2 = Math.max(lassoStart.y, my);
+        const hw = NODE_W / 2, hh = NODE_H / 2;
+        selectedIds = new Set();
+        data.modules.forEach(m => {
+          const pos = nodePos[m.id];
+          if (!pos) return;
+          if (pos.x + hw >= x1 && pos.x - hw <= x2 && pos.y + hh >= y1 && pos.y - hh <= y2) {
+            selectedIds.add(m.id);
+          }
+        });
+        rerender();
+      } else if (selectedIds.size > 0) {
+        // Plain click on background — clear selection
+        selectedIds = new Set();
+        rerender();
+      }
+
+      lassoEl?.remove();
+      lassoStart = null;
+      lassoEl    = null;
+    });
+
+    // ── Edge mode toggle ──────────────────────────────────────────────────────
+    const btnEdge = document.createElement('button');
+    btnEdge.className  = 'tb-btn';
+    btnEdge.id         = 'btn-edge-mode';
+    btnEdge.textContent = '⤡ Bent';
+    btnEdge.title       = 'Toggle straight / orthogonal edge routing';
+    const depthCtrl = document.getElementById('depth-control');
+    depthCtrl.parentNode.insertBefore(btnEdge, depthCtrl);
+
+    btnEdge.addEventListener('click', () => {
+      edgeMode = edgeMode === 'straight' ? 'orthogonal' : 'straight';
+      btnEdge.textContent = edgeMode === 'straight' ? '⤡ Bent' : '⟶ Straight';
+      rerender();
+    });
+
+    // ── Other toolbar / panel wiring ──────────────────────────────────────────
     document.getElementById('tab-type').addEventListener('click', () => {
       explorerMode = 'type';
       document.getElementById('tab-type').classList.add('active');
@@ -350,6 +478,7 @@
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
       focusedId = null;
+      selectedIds = new Set();
       updateExplorer();
       rerender();
     });
@@ -362,7 +491,7 @@
       const maxX = Math.max(...positions.map(p => p.x)) + hw;
       const minY = Math.min(...positions.map(p => p.y)) - hh;
       const maxY = Math.max(...positions.map(p => p.y)) + hh;
-      const pad = 40;
+      const pad  = 40;
       const scale = Math.min((svgW - pad * 2) / (maxX - minX), (svgH - pad * 2) / (maxY - minY), 1);
       const tx = (svgW - (maxX + minX) * scale) / 2;
       const ty = (svgH - (maxY + minY) * scale) / 2;
