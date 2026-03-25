@@ -102,29 +102,39 @@
     });
   }
 
-  // Run dagre on the visible subgraph and return new positions anchored so
-  // the focused node stays at its current screen location.
+  // Run dagre on the visible subgraph and return new positions centred so
+  // the focused node lands at the middle of the current viewport.
+  // All visible nodes (including the focused one) are animated to their
+  // new positions, so the neighbourhood always radiates around the focus.
   function computeSubgraphLayout(focusId, visibleIds) {
     const visMods  = data.modules.filter(m => visibleIds.has(m.id));
     const visEdges = data.edges.filter(e => visibleIds.has(e.from) && visibleIds.has(e.to));
 
-    const g = buildDagreGraph(visMods, visEdges, { nodesep: 80, ranksep: 120, marginx: 40, marginy: 40 });
+    // Extra nodesep/ranksep gives dagre more room to minimise crossings.
+    const g = buildDagreGraph(visMods, visEdges, { nodesep: 120, ranksep: 160, marginx: 60, marginy: 60 });
 
-    const newPos = {};
+    const rawPos = {};
     visMods.forEach(m => {
       const n = g.node(m.id);
-      if (n) newPos[m.id] = { x: n.x, y: n.y };
+      if (n) rawPos[m.id] = { x: n.x, y: n.y };
     });
 
-    const curFocus = nodePos[focusId];
-    const newFocus = newPos[focusId];
-    if (!curFocus || !newFocus) return {};
+    const focusDagre = rawPos[focusId];
+    if (!focusDagre) return {};
 
-    // Translate entire subgraph so the focused node doesn't jump
-    const offX = curFocus.x - newFocus.x;
-    const offY = curFocus.y - newFocus.y;
+    // Convert the current viewport centre to content-space coordinates so
+    // we can place the focused node there regardless of zoom / pan state.
+    const svgEl = document.getElementById('graph-svg');
+    const { width: svgW, height: svgH } = svgEl.getBoundingClientRect();
+    const tf = d3.zoomTransform(svgEl);
+    const vpCx = (svgW / 2 - tf.x) / tf.k;
+    const vpCy = (svgH / 2 - tf.y) / tf.k;
+
+    const offX = vpCx - focusDagre.x;
+    const offY = vpCy - focusDagre.y;
+
     const result = {};
-    Object.entries(newPos).forEach(([id, p]) => {
+    Object.entries(rawPos).forEach(([id, p]) => {
       result[id] = { x: p.x + offX, y: p.y + offY };
     });
     return result;
