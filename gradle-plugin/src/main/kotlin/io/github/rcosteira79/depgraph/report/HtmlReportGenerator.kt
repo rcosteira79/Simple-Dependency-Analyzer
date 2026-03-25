@@ -58,7 +58,8 @@ object HtmlReportGenerator {
             .ex-item { padding: 4px 10px; cursor: pointer; border-left: 2px solid transparent; font-family: monospace; font-size: 10px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .ex-item:hover { background: #272727; }
             .ex-item.selected { background: #0d3a5e; border-left-color: #4fc3f7; color: #4fc3f7; }
-            #graph-container { flex: 1; overflow: auto; position: relative; }
+            #graph-container { flex: 1; overflow: hidden; position: relative; }
+            #graph-svg { width: 100%; height: 100%; display: block; }
             #detail { width: 200px; flex-shrink: 0; border-left: 1px solid #3c3c3c; background: #1e1e1e; padding: 10px; font-size: 11px; overflow-y: auto; }
             #edge-detail { color: #aaa; font-size: 10px; line-height: 1.6; }
           </style>
@@ -67,6 +68,7 @@ object HtmlReportGenerator {
           <div id="toolbar">
             <span style="font-weight:bold;color:#4fc3f7">◈ Dependency Graph</span>
             <button class="tb-btn" id="btn-reset">↺ Reset</button>
+            <button class="tb-btn" id="btn-fit">⤢ Fit</button>
             <div id="depth-control">
               Depth <input id="depth-slider" type="range" min="1" max="5" value="2" style="width:80px">
               <span id="depth-value" style="color:#4fc3f7;font-weight:bold">2</span>
@@ -91,8 +93,10 @@ object HtmlReportGenerator {
                     <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="#f5a623"/>
                   </marker>
                 </defs>
-                <g id="edges"></g>
-                <g id="nodes"></g>
+                <g id="graph-content">
+                  <g id="edges"></g>
+                  <g id="nodes"></g>
+                </g>
               </svg>
             </div>
             <div id="detail">

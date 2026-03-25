@@ -11,15 +11,22 @@
   let focusedId = null;
   let depthValue = 2;
 
+  // Mutable node positions — initialised from dagre, updated by drag
+  const nodePos = {};
+
   // ── Layout (dagre) ─────────────────────────────────────────────────────────
   function computeLayout(modules, edges) {
     const g = new dagre.graphlib.Graph();
-    g.setGraph({ rankdir: 'TB', nodesep: 40, ranksep: 80, marginx: 40, marginy: 40 });
+    g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120, marginx: 80, marginy: 80 });
     g.setDefaultEdgeLabel(() => ({}));
     modules.forEach(m => g.setNode(m.id, { width: NODE_W, height: NODE_H, label: m.id }));
     edges.forEach(e => g.setEdge(e.from, e.to));
     dagre.layout(g);
-    return g;
+    // Store positions — only initialise; drag updates them in place
+    modules.forEach(m => {
+      const n = g.node(m.id);
+      if (n) nodePos[m.id] = { x: n.x, y: n.y };
+    });
   }
 
   // ── Visibility (focus + depth) ─────────────────────────────────────────────
@@ -49,50 +56,33 @@
     const threshold = hh / hw;
     let bx, by;
     if (ratio <= threshold) {
-      // exits through left/right
       const sx = dx > 0 ? hw : -hw;
       bx = cx1 + sx;
       by = cy1 + dy * Math.abs(sx) / Math.abs(dx);
     } else {
-      // exits through top/bottom
       const sy = dy > 0 ? hh : -hh;
       by = cy1 + sy;
       bx = cx1 + dx * Math.abs(sy) / Math.abs(dy);
     }
-    // pull back by gap
     const ux = dx / len, uy = dy / len;
     return [bx + ux * gap, by + uy * gap];
   }
 
-  // ── Render ─────────────────────────────────────────────────────────────────
-  function render() {
-    const { modules, edges } = data;
-    const g = computeLayout(modules, edges);
-    const visibleIds = getVisibleIds(focusedId, depthValue, modules, edges);
-
-    const graphEl = document.getElementById('graph-svg');
-    const graphNode = g.graph();
-    const svgW = Math.max(graphEl.parentElement.clientWidth, graphNode.width + 80);
-    const svgH = Math.max(graphEl.parentElement.clientHeight, graphNode.height + 80);
-    graphEl.setAttribute('viewBox', `0 0 ${svgW} ${svgH}`);
-    graphEl.setAttribute('width', svgW);
-    graphEl.setAttribute('height', svgH);
-
+  // ── Draw edges ─────────────────────────────────────────────────────────────
+  function drawEdges(visibleIds) {
+    const { edges } = data;
     const hw = NODE_W / 2, hh = NODE_H / 2;
-
-    // edges
     const edgeGroup = document.getElementById('edges');
     edgeGroup.innerHTML = '';
     edges.forEach(e => {
-      const sn = g.node(e.from), tn = g.node(e.to);
-      if (!sn || !tn) return;
+      const sp = nodePos[e.from], tp = nodePos[e.to];
+      if (!sp || !tp) return;
       const isFocusedEdge = focusedId && (e.from === focusedId || e.to === focusedId);
       const isVisible = !focusedId || (visibleIds.has(e.from) && visibleIds.has(e.to));
-
       const srcGap = e.from === focusedId ? FOCUS_GAP : GAP;
       const tgtGap = e.to === focusedId ? FOCUS_GAP : GAP;
-      const [x1, y1] = edgeEndpoint(sn.x, sn.y, tn.x, tn.y, hw, hh, srcGap);
-      const [x2, y2] = edgeEndpoint(tn.x, tn.y, sn.x, sn.y, hw, hh, tgtGap);
+      const [x1, y1] = edgeEndpoint(sp.x, sp.y, tp.x, tp.y, hw, hh, srcGap);
+      const [x2, y2] = edgeEndpoint(tp.x, tp.y, sp.x, sp.y, hw, hh, tgtGap);
 
       const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
       line.setAttribute('x1', x1); line.setAttribute('y1', y1);
@@ -106,30 +96,36 @@
       line.addEventListener('click', () => onEdgeClick(e.from, e.to));
       edgeGroup.appendChild(line);
     });
+  }
 
-    // nodes
+  // ── Draw nodes ─────────────────────────────────────────────────────────────
+  function drawNodes(visibleIds) {
+    const { modules } = data;
+    const hw = NODE_W / 2, hh = NODE_H / 2;
     const nodeGroup = document.getElementById('nodes');
     nodeGroup.innerHTML = '';
+
     modules.forEach(m => {
-      const n = g.node(m.id);
-      if (!n) return;
+      const pos = nodePos[m.id];
+      if (!pos) return;
       const isFocused = m.id === focusedId;
       const isDim = focusedId && !visibleIds.has(m.id);
       const color = NODE_COLORS[m.type] || NODE_COLORS.unknown;
       const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
 
+      const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', n.x - hw); rect.setAttribute('y', n.y - hh);
+      rect.setAttribute('x', -hw); rect.setAttribute('y', -hh);
       rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
       rect.setAttribute('rx', '5'); rect.setAttribute('fill', color);
       rect.setAttribute('stroke', isFocused ? '#f5a623' : border);
       rect.setAttribute('stroke-width', isFocused ? '2.5' : '1');
       rect.setAttribute('opacity', isDim ? '0.15' : '1');
-      rect.style.cursor = 'pointer';
-      rect.addEventListener('click', () => onNodeClick(m.id));
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      text.setAttribute('x', n.x); text.setAttribute('y', n.y + 4);
+      text.setAttribute('x', 0); text.setAttribute('y', 4);
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('font-size', '10');
       text.setAttribute('font-family', 'monospace');
@@ -138,16 +134,56 @@
       text.setAttribute('opacity', isDim ? '0.15' : '1');
       text.textContent = m.id;
 
-      nodeGroup.appendChild(rect);
-      nodeGroup.appendChild(text);
+      g.appendChild(rect);
+      g.appendChild(text);
+      nodeGroup.appendChild(g);
+
+      // D3 drag — distinguishes click (no movement) from drag
+      let dragMoved = false;
+      const drag = d3.drag()
+        .on('start', function () {
+          dragMoved = false;
+          d3.select(this).raise();
+        })
+        .on('drag', function (event) {
+          dragMoved = true;
+          nodePos[m.id].x = event.x;
+          nodePos[m.id].y = event.y;
+          d3.select(this).attr('transform', `translate(${event.x},${event.y})`);
+          // Redraw edges live; nodes stay in place via their transforms
+          drawEdges(getVisibleIds(focusedId, depthValue, data.modules, data.edges));
+        })
+        .on('end', function () {
+          if (!dragMoved) onNodeClick(m.id);
+        });
+
+      d3.select(g).call(drag).style('cursor', 'grab');
     });
+  }
+
+  // ── Render ─────────────────────────────────────────────────────────────────
+  // Full render: recompute dagre layout then draw
+  function render() {
+    const { modules, edges } = data;
+    computeLayout(modules, edges);
+    const visibleIds = getVisibleIds(focusedId, depthValue, modules, edges);
+    drawEdges(visibleIds);
+    drawNodes(visibleIds);
+  }
+
+  // Rerender: draw using current nodePos (preserves drag positions)
+  function rerender() {
+    const { modules, edges } = data;
+    const visibleIds = getVisibleIds(focusedId, depthValue, modules, edges);
+    drawEdges(visibleIds);
+    drawNodes(visibleIds);
   }
 
   // ── Events ─────────────────────────────────────────────────────────────────
   function onNodeClick(id) {
     focusedId = focusedId === id ? null : id;
     updateExplorer();
-    render();
+    rerender();
   }
 
   function onEdgeClick(from, to) {
@@ -208,6 +244,16 @@
 
   // ── Bootstrap ──────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
+    // Pan/zoom: D3 zoom on the SVG, transform applied to #graph-content
+    const svg = d3.select('#graph-svg');
+    const content = d3.select('#graph-content');
+
+    const zoom = d3.zoom()
+      .scaleExtent([0.05, 4])
+      .on('zoom', event => content.attr('transform', event.transform));
+
+    svg.call(zoom).on('dblclick.zoom', null);
+
     document.getElementById('tab-type').addEventListener('click', () => {
       explorerMode = 'type';
       document.getElementById('tab-type').classList.add('active');
@@ -224,14 +270,33 @@
     document.getElementById('depth-slider').addEventListener('input', e => {
       depthValue = parseInt(e.target.value);
       document.getElementById('depth-value').textContent = depthValue;
-      render();
+      rerender();
     });
     document.getElementById('btn-reset').addEventListener('click', () => {
       focusedId = null;
       updateExplorer();
-      render();
+      rerender();
     });
+    document.getElementById('btn-fit').addEventListener('click', () => {
+      const { width: svgW, height: svgH } = document.getElementById('graph-svg').getBoundingClientRect();
+      const positions = Object.values(nodePos);
+      if (positions.length === 0) return;
+      const hw = NODE_W / 2, hh = NODE_H / 2;
+      const minX = Math.min(...positions.map(p => p.x)) - hw;
+      const maxX = Math.max(...positions.map(p => p.x)) + hw;
+      const minY = Math.min(...positions.map(p => p.y)) - hh;
+      const maxY = Math.max(...positions.map(p => p.y)) + hh;
+      const pad = 40;
+      const scale = Math.min((svgW - pad * 2) / (maxX - minX), (svgH - pad * 2) / (maxY - minY), 1);
+      const tx = (svgW - (maxX + minX) * scale) / 2;
+      const ty = (svgH - (maxY + minY) * scale) / 2;
+      svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    });
+
     updateExplorer();
     render();
+
+    // Auto-fit after initial render
+    setTimeout(() => document.getElementById('btn-fit').click(), 50);
   });
 })();
