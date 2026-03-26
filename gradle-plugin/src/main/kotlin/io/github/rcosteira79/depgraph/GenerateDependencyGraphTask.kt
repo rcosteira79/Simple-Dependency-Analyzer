@@ -73,6 +73,8 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
                             config.dependencies
                                 .filterIsInstance<org.gradle.api.artifacts.ProjectDependency>()
                                 .map {
+                                    // dependencyProject is deprecated since Gradle 8.x; the replacement API
+                                    // requires Gradle 8.1+ which we don't mandate yet.
                                     @Suppress("DEPRECATION")
                                     it.dependencyProject.path
                                 }

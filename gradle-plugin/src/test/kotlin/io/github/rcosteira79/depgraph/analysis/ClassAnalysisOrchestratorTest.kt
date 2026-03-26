@@ -244,6 +244,45 @@ class ClassAnalysisOrchestratorTest {
     }
 
     @Test
+    fun `ignores class references to modules without declared dependency`() {
+        // Given: :app references a class in :secret but has no declared dependency on :secret
+        val inputAppResult =
+            BytecodeAnalysisResult(
+                moduleId = ":app",
+                discoveredClasses =
+                    listOf(
+                        DiscoveredClass("com.example.app.AppMain", "AppMain", "com.example.app"),
+                    ),
+                classReferences =
+                    mapOf(
+                        "com.example.app.AppMain" to setOf("com.example.secret.Hidden"),
+                    ),
+            )
+        val inputSecretResult =
+            BytecodeAnalysisResult(
+                moduleId = ":secret",
+                discoveredClasses =
+                    listOf(
+                        DiscoveredClass("com.example.secret.Hidden", "Hidden", "com.example.secret"),
+                    ),
+                classReferences = emptyMap(),
+            )
+        // No dependency from :app to :secret
+        val inputModuleEdges: Map<String, Set<String>> = emptyMap()
+
+        // When:
+        val actualResult: Map<String, ModuleClassData> =
+            ClassAnalysisOrchestrator.buildClassData(
+                analysisResults = listOf(inputAppResult, inputSecretResult),
+                moduleEdges = inputModuleEdges,
+            )
+
+        // Then: no boundary classes and no edges
+        assertTrue(actualResult[":app"]!!.packages.isEmpty())
+        assertTrue(actualResult[":app"]!!.classEdges.isEmpty())
+    }
+
+    @Test
     fun `ignores references to classes not in any analysed module`() {
         val inputAppResult =
             BytecodeAnalysisResult(

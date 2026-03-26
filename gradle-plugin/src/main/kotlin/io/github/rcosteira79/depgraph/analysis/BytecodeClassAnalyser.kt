@@ -36,7 +36,7 @@ class BytecodeClassAnalyser(
                     .walkTopDown()
                     .filter { it.isFile && it.extension == "class" }
                     .forEach { classFile ->
-                        analyseClassFile(classFile, dir, discoveredClasses, classReferences)
+                        analyseClassFile(classFile, discoveredClasses, classReferences)
                     }
             }
 
@@ -49,7 +49,6 @@ class BytecodeClassAnalyser(
 
     private fun analyseClassFile(
         classFile: File,
-        rootDirectory: File,
         discoveredClasses: MutableList<DiscoveredClass>,
         classReferences: MutableMap<String, MutableSet<String>>,
     ) {

@@ -31,6 +31,7 @@ object ClassAnalysisOrchestrator {
                         targetClasses.mapNotNull { targetClass ->
                             val targetModule: String = classToModule[targetClass] ?: return@mapNotNull null
                             if (targetModule == sourceModule) return@mapNotNull null
+                            if (moduleEdges[sourceModule]?.contains(targetModule) != true) return@mapNotNull null
                             ClassLevelEdge(
                                 fromClassId = sourceClass,
                                 fromModuleId = sourceModule,
