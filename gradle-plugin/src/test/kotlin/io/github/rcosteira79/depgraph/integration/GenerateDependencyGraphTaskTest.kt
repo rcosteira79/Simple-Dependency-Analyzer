@@ -37,7 +37,7 @@ class GenerateDependencyGraphTaskTest {
         assertTrue(actualGraphJson.exists(), "graph.json should exist")
 
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
-        assertEquals(1, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(2, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
 
         val actualModuleIds: List<String> =
             actualGraph["modules"]!!.jsonArray.map {
