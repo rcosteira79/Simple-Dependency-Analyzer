@@ -17,6 +17,23 @@
   let selectedIds = new Set();
   let isAnimating = false;
 
+  // ── Unfold state ──────────────────────────────────────────────────────────
+  const unfoldedModules   = new Map();  // moduleId → classData entry
+  const expandedPackages  = new Map();  // moduleId → Set of expanded package names
+  let highlightedClassId  = null;
+
+  const hasClassData = !!(data.classData && Object.keys(data.classData).length > 0);
+
+  // Package pill dimensions
+  const PILL_W = 180, PILL_H = 24;
+  const CLASS_W = 120, CLASS_H = 22;
+  const BOX_PAD = 16;
+  const PILL_COLORS = {
+    INCOMING: '#4fc3f7',
+    OUTGOING: '#f5a623',
+    BOTH:     '#c084fc',
+  };
+
   // Mutable node positions — initialised from dagre, updated by drag/layout
   const nodePos      = {};
   // Live <g> element references — updated by drawNodes, used for animation
@@ -25,6 +42,66 @@
   // Fast module lookup
   const moduleById = {};
   data.modules.forEach(m => { moduleById[m.id] = m; });
+
+  // ── Context menu ──────────────────────────────────────────────────────────
+  let contextMenu = null;
+
+  function showContextMenu(x, y, items) {
+    hideContextMenu();
+    const menu = document.createElement('div');
+    menu.id = 'ctx-menu';
+    menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;background:#2b2b2b;border:1px solid #555;border-radius:4px;padding:4px 0;z-index:9999;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,0.4);`;
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.textContent = item.label;
+      row.style.cssText = 'padding:6px 14px;font-size:11px;color:#ccc;cursor:pointer;';
+      row.addEventListener('mouseenter', () => { row.style.background = '#3c3c3c'; });
+      row.addEventListener('mouseleave', () => { row.style.background = 'none'; });
+      row.addEventListener('click', () => { hideContextMenu(); item.action(); });
+      menu.appendChild(row);
+    });
+    document.body.appendChild(menu);
+    contextMenu = menu;
+  }
+
+  function hideContextMenu() {
+    if (contextMenu) { contextMenu.remove(); contextMenu = null; }
+  }
+
+  document.addEventListener('click', hideContextMenu);
+
+  // ── Unfold / collapse / highlight logic ─────────────────────────────────
+  function unfoldModule(moduleId) {
+    if (!hasClassData || !data.classData[moduleId]) return;
+    unfoldedModules.set(moduleId, data.classData[moduleId]);
+    expandedPackages.set(moduleId, new Set());
+    highlightedClassId = null;
+    rerender();
+  }
+
+  function collapseModule(moduleId) {
+    unfoldedModules.delete(moduleId);
+    expandedPackages.delete(moduleId);
+    highlightedClassId = null;
+    rerender();
+  }
+
+  function togglePackage(moduleId, packageName) {
+    const expanded = expandedPackages.get(moduleId) || new Set();
+    if (expanded.has(packageName)) {
+      expanded.delete(packageName);
+      highlightedClassId = null;
+    } else {
+      expanded.add(packageName);
+    }
+    expandedPackages.set(moduleId, expanded);
+    rerender();
+  }
+
+  function highlightClass(classId) {
+    highlightedClassId = highlightedClassId === classId ? null : classId;
+    rerender();
+  }
 
   // ── Cycle detection (iterative DFS, computed once) ─────────────────────────
   const cycleEdgeKeys = (function () {
@@ -358,6 +435,49 @@
       path.addEventListener('click', () => onEdgeClick(e.from, e.to, isCycle));
       edgeGroup.appendChild(path);
     });
+
+    // ── Class-level edges for unfolded modules ──────────────────────────────
+    if (unfoldedModules.size > 0) {
+      unfoldedModules.forEach((classDataEntry, moduleId) => {
+        classDataEntry.classEdges.forEach(ce => {
+          const fromPos = nodePos[ce.fromModuleId];
+          const toPos = nodePos[ce.toModuleId];
+          if (!fromPos || !toPos) return;
+          if (!visibleIds.has(ce.fromModuleId) || !visibleIds.has(ce.toModuleId)) return;
+
+          const isHighlighted = highlightedClassId === ce.fromClassId || highlightedClassId === ce.toClassId;
+          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP);
+
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('d', pathD);
+          path.setAttribute('fill', 'none');
+          if (isHighlighted) {
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', '2');
+            path.setAttribute('opacity', '1');
+          } else if (highlightedClassId) {
+            path.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+            path.setAttribute('stroke-width', '0.8');
+            path.setAttribute('opacity', '0.08');
+          } else {
+            path.setAttribute('stroke', '#c084fc');
+            path.setAttribute('stroke-width', '1');
+            path.setAttribute('stroke-dasharray', '3,2');
+            path.setAttribute('opacity', '0.5');
+          }
+          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : 'url(#arrow-trans)');
+          path.style.cursor = 'pointer';
+          path.addEventListener('click', () => {
+            const detail = document.getElementById('edge-detail');
+            detail.innerHTML = `<strong style="color:#c084fc">Class edge</strong><br/>` +
+              `<span style="color:#aaa">${ce.fromClassId}</span><br/>` +
+              `<span style="color:#555">↓</span><br/>` +
+              `<span style="color:#aaa">${ce.toClassId}</span>`;
+          });
+          edgeGroup.appendChild(path);
+        });
+      });
+    }
   }
 
   // ── Draw nodes ─────────────────────────────────────────────────────────────
@@ -368,6 +488,11 @@
     nodeGroup.innerHTML = '';
 
     modules.forEach(m => {
+      if (unfoldedModules.has(m.id)) {
+        drawUnfoldedModule(m, visibleIds);
+        return;
+      }
+
       const pos = nodePos[m.id];
       if (!pos) return;
       const isFocused   = m.id === focusedId;
@@ -455,7 +580,155 @@
         });
 
       d3.select(g).call(drag).style('cursor', 'grab');
+
+      d3.select(g).on('contextmenu', function (event) {
+        event.preventDefault();
+        const items = [];
+        if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && !unfoldedModules.has(m.id)) {
+          items.push({ label: 'Inspect classes', action: () => unfoldModule(m.id) });
+        }
+        if (unfoldedModules.has(m.id)) {
+          items.push({ label: 'Collapse', action: () => collapseModule(m.id) });
+        }
+        if (items.length > 0) showContextMenu(event.clientX, event.clientY, items);
+      });
     });
+  }
+
+  // ── Draw unfolded module ───────────────────────────────────────────────────
+  function drawUnfoldedModule(m, visibleIds) {
+    const pos = nodePos[m.id];
+    if (!pos) return;
+    const isDim = focusedId && !visibleIds.has(m.id);
+    const classDataEntry = unfoldedModules.get(m.id);
+    if (!classDataEntry) return;
+
+    const expanded = expandedPackages.get(m.id) || new Set();
+    const packages = classDataEntry.packages;
+    if (packages.length === 0) { collapseModule(m.id); return; }
+
+    const nodeGroup = document.getElementById('nodes');
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
+    nodeElements[m.id] = g;
+
+    // Compute box dimensions
+    let totalHeight = 30; // title area
+    let maxWidth = PILL_W + BOX_PAD * 2;
+    packages.forEach(pkg => {
+      if (expanded.has(pkg.name)) {
+        totalHeight += 20 + pkg.classes.length * (CLASS_H + 4);
+        maxWidth = Math.max(maxWidth, CLASS_W + BOX_PAD * 2 + 20);
+      } else {
+        totalHeight += PILL_H + 6;
+      }
+    });
+    totalHeight += BOX_PAD;
+
+    // Dashed bounding box
+    const boxW = maxWidth, boxH = totalHeight;
+    const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', -boxW / 2); rect.setAttribute('y', -boxH / 2);
+    rect.setAttribute('width', boxW); rect.setAttribute('height', boxH);
+    rect.setAttribute('rx', '8'); rect.setAttribute('fill', 'rgba(30,30,30,0.85)');
+    rect.setAttribute('stroke', border); rect.setAttribute('stroke-width', '1.5');
+    rect.setAttribute('stroke-dasharray', '6,3');
+    rect.setAttribute('opacity', isDim ? '0.12' : '1');
+    g.appendChild(rect);
+
+    // Title
+    const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    title.setAttribute('x', 0); title.setAttribute('y', -boxH / 2 + 18);
+    title.setAttribute('text-anchor', 'middle'); title.setAttribute('font-size', '10');
+    title.setAttribute('font-family', 'monospace'); title.setAttribute('fill', '#888');
+    title.setAttribute('opacity', isDim ? '0.12' : '1');
+    title.textContent = m.id;
+    title.style.cursor = 'pointer';
+    title.addEventListener('contextmenu', (event) => {
+      event.preventDefault(); event.stopPropagation();
+      showContextMenu(event.clientX, event.clientY, [
+        { label: 'Collapse', action: () => collapseModule(m.id) },
+      ]);
+    });
+    g.appendChild(title);
+
+    // Package pills / expanded classes
+    let yOffset = -boxH / 2 + 30;
+    packages.forEach(pkg => {
+      const color = PILL_COLORS[pkg.boundaryType] || '#888';
+      if (expanded.has(pkg.name)) {
+        // Package header (collapsible)
+        const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        header.setAttribute('x', -boxW / 2 + BOX_PAD); header.setAttribute('y', yOffset + 12);
+        header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
+        header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
+        header.textContent = `▾ ${pkg.name}`;
+        header.addEventListener('click', () => togglePackage(m.id, pkg.name));
+        g.appendChild(header);
+        yOffset += 20;
+
+        // Class nodes
+        pkg.classes.forEach(cls => {
+          const isHighlighted = highlightedClassId === cls.id;
+          const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          clsRect.setAttribute('x', -CLASS_W / 2); clsRect.setAttribute('y', yOffset);
+          clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
+          clsRect.setAttribute('rx', '3');
+          clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
+          clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
+          clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
+          clsRect.style.cursor = 'pointer';
+          clsRect.addEventListener('click', () => highlightClass(cls.id));
+          g.appendChild(clsRect);
+
+          const clsText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          clsText.setAttribute('x', 0); clsText.setAttribute('y', yOffset + 14);
+          clsText.setAttribute('text-anchor', 'middle'); clsText.setAttribute('font-size', '9');
+          clsText.setAttribute('font-family', 'monospace');
+          clsText.setAttribute('fill', isHighlighted ? '#fff' : '#aaa');
+          clsText.setAttribute('pointer-events', 'none');
+          clsText.textContent = cls.simpleName;
+          g.appendChild(clsText);
+
+          yOffset += CLASS_H + 4;
+        });
+      } else {
+        // Collapsed pill
+        const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        pill.setAttribute('x', -PILL_W / 2); pill.setAttribute('y', yOffset);
+        pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
+        pill.setAttribute('rx', PILL_H / 2); pill.setAttribute('fill', '#1a1a2e');
+        pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '1');
+        pill.style.cursor = 'pointer';
+        pill.addEventListener('click', () => togglePackage(m.id, pkg.name));
+        g.appendChild(pill);
+
+        const pillText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        pillText.setAttribute('x', 0); pillText.setAttribute('y', yOffset + 15);
+        pillText.setAttribute('text-anchor', 'middle'); pillText.setAttribute('font-size', '9');
+        pillText.setAttribute('font-family', 'monospace'); pillText.setAttribute('fill', color);
+        pillText.setAttribute('pointer-events', 'none');
+        const shortPkg = pkg.name.split('.').slice(-2).join('.');
+        pillText.textContent = `${shortPkg} (${pkg.classes.length})`;
+        g.appendChild(pillText);
+
+        yOffset += PILL_H + 6;
+      }
+    });
+
+    nodeGroup.appendChild(g);
+
+    // Make the bounding box draggable
+    const drag = d3.drag()
+      .on('start', function (event) { d3.select(this).raise(); })
+      .on('drag', function (event) {
+        nodePos[m.id].x += event.dx;
+        nodePos[m.id].y += event.dy;
+        d3.select(g).attr('transform', `translate(${nodePos[m.id].x},${nodePos[m.id].y})`);
+        drawEdges(getVisibleIds(focusedId, depthValue, data.modules, data.edges));
+      });
+    d3.select(g).call(drag);
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
