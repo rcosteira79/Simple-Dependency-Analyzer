@@ -1,7 +1,7 @@
 plugins {
     `kotlin-dsl`
     `java-gradle-plugin`
-    kotlin("plugin.serialization") version "1.9.22"
+    kotlin("plugin.serialization") version embeddedKotlinVersion
     id("com.gradle.plugin-publish") version "1.2.1"
 }
 

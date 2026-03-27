@@ -53,19 +53,27 @@ object ModuleAnalyser {
 
             configuration.dependencies
                 .filterIsInstance<org.gradle.api.artifacts.ProjectDependency>()
-                .filter { dependency ->
-                    @Suppress("DEPRECATION")
-                    dependency.dependencyProject.path in projectPaths
-                }.map { dependency ->
-                    @Suppress("DEPRECATION")
-                    Edge(
-                        from = path,
-                        to = dependency.dependencyProject.path,
-                        configuration = configurationName,
-                    )
+                .mapNotNull { dependency ->
+                    val depPath: String = resolveProjectDependencyPath(dependency) ?: return@mapNotNull null
+                    if (depPath !in projectPaths) return@mapNotNull null
+                    Edge(from = path, to = depPath, configuration = configurationName)
                 }
         }
 }
+
+private fun resolveProjectDependencyPath(dependency: org.gradle.api.artifacts.ProjectDependency): String? =
+    try {
+        // Gradle 9+: ProjectDependency has a getPath() method
+        dependency::class.java.getMethod("getPath").invoke(dependency) as? String
+    } catch (_: NoSuchMethodException) {
+        try {
+            // Gradle 8.x: use deprecated getDependencyProject()
+            val project = dependency::class.java.getMethod("getDependencyProject").invoke(dependency)
+            project::class.java.getMethod("getPath").invoke(project) as? String
+        } catch (_: Exception) {
+            null
+        }
+    }
 
 private fun isContainerProject(project: Project): Boolean = project.subprojects.isNotEmpty() && project.appliedKnownPluginIds().isEmpty()
 
