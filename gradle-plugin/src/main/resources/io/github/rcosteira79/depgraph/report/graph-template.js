@@ -250,22 +250,32 @@
     const ZONE_LABEL_H = 18;
 
     function zoneSize(pkgs) {
-      let rowW = 0;
-      let maxExpandedH = 0;
-      let hasExpanded = false;
+      const MAX_COLS = 8;
+      let itemIndex = 0;
+      let maxRowWidth = 0;
+
       pkgs.forEach(pkg => {
         if (expanded.has(pkg.name)) {
-          hasExpanded = true;
-          const cols = Math.min(pkg.classes.length, 3);
-          const rows = Math.ceil(pkg.classes.length / 3);
-          rowW += cols * (CLASS_W + 8) + 16;
-          maxExpandedH = Math.max(maxExpandedH, 20 + rows * (CLASS_H + 4));
+          if (itemIndex % MAX_COLS !== 0) itemIndex = Math.ceil(itemIndex / MAX_COLS) * MAX_COLS;
+          itemIndex += MAX_COLS; // header row
+          const classMaxCols = Math.min(pkg.classes.length, MAX_COLS);
+          const classRows = Math.ceil(pkg.classes.length / classMaxCols);
+          maxRowWidth = Math.max(maxRowWidth, classMaxCols * (CLASS_W + 8));
+          itemIndex += classRows * MAX_COLS;
         } else {
-          rowW += PILL_W + 8;
+          itemIndex++;
         }
       });
-      const h = hasExpanded ? maxExpandedH + PILL_H + 10 : PILL_H + 6;
-      return { width: rowW + BOX_PAD * 2, height: h + ZONE_LABEL_H };
+
+      const totalRows = Math.ceil(itemIndex / MAX_COLS);
+      const pillCols = Math.min(pkgs.filter(p => !expanded.has(p.name)).length, MAX_COLS);
+      const pillRowW = pillCols * (PILL_W + 8);
+      maxRowWidth = Math.max(maxRowWidth, pillRowW);
+
+      return {
+        width: maxRowWidth + BOX_PAD * 2,
+        height: totalRows * (PILL_H + 6) + 18,
+      };
     }
 
     const inSize = incomingPkgs.length > 0 ? zoneSize(incomingPkgs) : { width: 0, height: 0 };
@@ -845,8 +855,9 @@
           const isHighlighted = highlightedClassId === ce.fromClassId || highlightedClassId === ce.toClassId;
           // Use boundary type color: cyan for incoming to inspected, orange for outgoing from inspected
           const isOutgoing = ce.fromModuleId === inspectedModuleId;
-          const edgeColor = isOutgoing ? '#f5a623' : '#4fc3f7';
-          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP, ce.fromModuleId, ce.toModuleId);
+          const edgeColor = isOutgoing ? '#66bb6a' : '#42a5f5';
+          // For class edges, use small gap without box-size clipping since we target specific sub-elements
+          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP, null, null);
 
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           path.setAttribute('d', pathD);
@@ -864,7 +875,7 @@
             path.setAttribute('stroke-width', '1.5');
             path.setAttribute('opacity', '0.8');
           }
-          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : (isOutgoing ? 'url(#arrow-lit)' : 'url(#arrow-rel)'));
+          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : (isOutgoing ? 'url(#arrow-class-out)' : 'url(#arrow-class-in)'));
           path.style.cursor = 'pointer';
           path.addEventListener('click', () => {
             const detail = document.getElementById('edge-detail');
@@ -1075,27 +1086,38 @@
         label.textContent = zoneLabel;
         g.appendChild(label);
 
-        let xCursor = -boxW / 2 + BOX_PAD;
         const yBase = zoneTop + 20;
+        const MAX_COLS = 8;
+        let itemIndex = 0;
 
         pkgs.forEach(pkg => {
           const color = PILL_COLORS[pkg.boundaryType] || '#888';
 
           if (expanded.has(pkg.name)) {
+            // Start expanded package on a new row
+            if (itemIndex % MAX_COLS !== 0) { itemIndex = Math.ceil(itemIndex / MAX_COLS) * MAX_COLS; }
+
+            // Package header
+            const headerRow = Math.floor(itemIndex / MAX_COLS);
+            const headerY = yBase + headerRow * (PILL_H + 6);
+
             const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            header.setAttribute('x', xCursor); header.setAttribute('y', yBase + 12);
+            header.setAttribute('x', -boxW / 2 + BOX_PAD); header.setAttribute('y', headerY + 12);
             header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
             header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
             header.textContent = '\u25BE ' + pkg.name.split('.').slice(-2).join('.');
             header.addEventListener('click', () => togglePackage(pkg.name));
             g.appendChild(header);
+            itemIndex = (headerRow + 1) * MAX_COLS; // move to next row for classes
 
-            const cols = Math.min(pkg.classes.length, 3);
+            // Classes in a grid (max MAX_COLS columns)
+            const classMaxCols = Math.min(pkg.classes.length, MAX_COLS);
             pkg.classes.forEach((cls, ci) => {
-              const col = ci % cols;
-              const row = Math.floor(ci / cols);
-              const cx = xCursor + col * (CLASS_W + 8) + CLASS_W / 2;
-              const cy = yBase + 20 + row * (CLASS_H + 4);
+              const col = ci % classMaxCols;
+              const row = Math.floor(ci / classMaxCols);
+              const classRow = Math.floor(itemIndex / MAX_COLS) + row;
+              const cx = -boxW / 2 + BOX_PAD + col * (CLASS_W + 8) + CLASS_W / 2;
+              const cy = yBase + classRow * (PILL_H + 6) + (PILL_H - CLASS_H) / 2;
 
               const isHighlighted = highlightedClassId === cls.id;
               const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -1124,10 +1146,15 @@
               nodePos['class:' + cls.id] = { x: pos.x + cx, y: pos.y + cy + CLASS_H / 2 };
             });
 
-            xCursor += Math.min(pkg.classes.length, 3) * (CLASS_W + 8) + 16;
+            const classRows = Math.ceil(pkg.classes.length / classMaxCols);
+            itemIndex = (Math.floor(itemIndex / MAX_COLS) + classRows) * MAX_COLS;
           } else {
-            const pillX = xCursor;
-            const pillY = yBase;
+            // Collapsed pill in matrix position
+            const col = itemIndex % MAX_COLS;
+            const row = Math.floor(itemIndex / MAX_COLS);
+            const pillX = -boxW / 2 + BOX_PAD + col * (PILL_W + 8);
+            const pillY = yBase + row * (PILL_H + 6);
+
             const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             pill.setAttribute('x', pillX); pill.setAttribute('y', pillY);
             pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
@@ -1150,8 +1177,7 @@
             g.appendChild(pillText);
 
             nodePos['pkg:' + m.id + ':' + pkg.name] = { x: pos.x + pillX + PILL_W / 2, y: pos.y + pillY + PILL_H / 2 };
-
-            xCursor += PILL_W + 8;
+            itemIndex++;
           }
         });
       }
@@ -1186,8 +1212,7 @@
       .on('drag', function (event) {
         nodePos[m.id].x += event.dx;
         nodePos[m.id].y += event.dy;
-        d3.select(g).attr('transform', `translate(${nodePos[m.id].x},${nodePos[m.id].y})`);
-        drawEdges(getEffectiveVisibleIds());
+        rerender();
       });
     d3.select(g).call(drag);
   }

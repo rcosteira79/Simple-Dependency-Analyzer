@@ -98,6 +98,12 @@ object HtmlReportGenerator {
                   <marker id="arrow-trans" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
                     <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="#c084fc"/>
                   </marker>
+                  <marker id="arrow-class-out" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="#66bb6a"/>
+                  </marker>
+                  <marker id="arrow-class-in" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="#42a5f5"/>
+                  </marker>
                 </defs>
                 <g id="graph-content">
                   <g id="edges"></g>
