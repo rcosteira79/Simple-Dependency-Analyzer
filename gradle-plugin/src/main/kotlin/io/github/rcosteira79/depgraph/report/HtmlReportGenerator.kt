@@ -60,8 +60,11 @@ object HtmlReportGenerator {
             .ex-item.selected { background: #0d3a5e; border-left-color: #4fc3f7; color: #4fc3f7; }
             #graph-container { flex: 1; overflow: hidden; position: relative; }
             #graph-svg { width: 100%; height: 100%; display: block; }
-            #detail { width: 200px; flex-shrink: 0; border-left: 1px solid #3c3c3c; background: #1e1e1e; padding: 10px; font-size: 11px; overflow-y: auto; }
-            #edge-detail { color: #aaa; font-size: 10px; line-height: 1.6; }
+            #detail-wrapper { display: flex; flex-shrink: 0; }
+            #detail-resize { width: 4px; cursor: col-resize; background: #3c3c3c; flex-shrink: 0; }
+            #detail-resize:hover { background: #4fc3f7; }
+            #detail { width: 240px; min-width: 120px; max-width: 600px; flex-shrink: 0; border-left: 1px solid #3c3c3c; background: #1e1e1e; padding: 10px; font-size: 11px; overflow-y: auto; }
+            #edge-detail { color: #aaa; font-size: 10px; line-height: 1.6; word-break: break-all; }
           </style>
         </head>
         <body>
@@ -111,8 +114,11 @@ object HtmlReportGenerator {
                 </g>
               </svg>
             </div>
-            <div id="detail">
-              <div id="edge-detail" style="color:#555;font-size:10px">Click an edge to inspect it.</div>
+            <div id="detail-wrapper">
+              <div id="detail-resize"></div>
+              <div id="detail">
+                <div id="edge-detail" style="color:#555;font-size:10px">Click an edge to inspect it.</div>
+              </div>
             </div>
           </div>
           <script>window.__GRAPH_DATA__ = $graphDataJson;</script>

@@ -1375,13 +1375,22 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
-    // Mouse wheel = zoom (centred on cursor). Middle mouse drag = pan.
+    // Mouse wheel = zoom; ctrl+wheel = horizontal scroll; middle mouse drag = pan.
     const zoom = d3.zoom()
-      .filter(event => event.type === 'wheel' || event.button === 1)
+      .filter(event => (event.type === 'wheel' && !event.ctrlKey) || event.button === 1)
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
+
+    // ctrl+wheel → horizontal pan
+    svg.node().addEventListener('wheel', event => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      const tf = d3.zoomTransform(svg.node());
+      const newTf = tf.translate(-event.deltaY / tf.k, 0);
+      svg.call(zoom.transform, newTf);
+    }, { passive: false });
 
     // Prevent middle-click autoscroll cursor
     svg.node().addEventListener('mousedown', event => {
@@ -1539,6 +1548,24 @@
       const ty = (svgH - (maxY + minY) * scale) / 2;
       svg.transition().duration(400).call(zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
     });
+
+    // ── Resizable detail pane ──────────────────────────────────────────────────
+    const resizeHandle = document.getElementById('detail-resize');
+    const detailPane = document.getElementById('detail');
+    if (resizeHandle && detailPane) {
+      let isResizing = false;
+      resizeHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        e.preventDefault();
+      });
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+        const mainEl = document.getElementById('main');
+        const newWidth = mainEl.getBoundingClientRect().right - e.clientX;
+        detailPane.style.width = Math.max(120, Math.min(600, newWidth)) + 'px';
+      });
+      document.addEventListener('mouseup', () => { isResizing = false; });
+    }
 
     updateExplorer();
     render();
