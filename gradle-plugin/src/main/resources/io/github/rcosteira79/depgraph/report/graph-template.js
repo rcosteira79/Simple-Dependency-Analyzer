@@ -31,12 +31,6 @@
   const PILL_W = 180, PILL_H = 24;
   const CLASS_W = 120, CLASS_H = 22;
   const BOX_PAD = 16;
-  const PILL_COLORS = {
-    INCOMING: '#4fc3f7',
-    OUTGOING: '#f5a623',
-    BOTH:     '#c084fc',
-  };
-
   // Mutable node positions — initialised from dagre, updated by drag/layout
   const nodePos      = {};
   // Live <g> element references — updated by drawNodes, used for animation
@@ -123,62 +117,106 @@
   }
 
   function getRelationshipData(inspectedId, targetId) {
+    if (!targetId) return null;
+
+    // Collect ALL class edges between these two modules from BOTH sides
+    const relevantEdges = [];
+
     const inspectedData = data.classData[inspectedId];
-    if (!inspectedData || !targetId) return null;
+    if (inspectedData) {
+      inspectedData.classEdges.forEach(ce => {
+        if ((ce.fromModuleId === inspectedId && ce.toModuleId === targetId) ||
+            (ce.fromModuleId === targetId && ce.toModuleId === inspectedId)) {
+          relevantEdges.push(ce);
+        }
+      });
+    }
 
-    // Find class edges between inspected and target modules (both directions)
-    const relevantEdges = inspectedData.classEdges.filter(ce =>
-      (ce.fromModuleId === inspectedId && ce.toModuleId === targetId) ||
-      (ce.fromModuleId === targetId && ce.toModuleId === inspectedId)
-    );
-
-    if (relevantEdges.length === 0) {
-      // Also check target's class data for edges back to inspected
-      const targetData = data.classData[targetId];
-      if (targetData) {
-        const reverseEdges = targetData.classEdges.filter(ce =>
-          (ce.fromModuleId === targetId && ce.toModuleId === inspectedId) ||
-          (ce.fromModuleId === inspectedId && ce.toModuleId === targetId)
-        );
-        relevantEdges.push(...reverseEdges);
-      }
+    const targetData = data.classData[targetId];
+    if (targetData) {
+      targetData.classEdges.forEach(ce => {
+        if ((ce.fromModuleId === targetId && ce.toModuleId === inspectedId) ||
+            (ce.fromModuleId === inspectedId && ce.toModuleId === targetId)) {
+          // Avoid duplicates
+          const isDup = relevantEdges.some(e =>
+            e.fromClassId === ce.fromClassId && e.toClassId === ce.toClassId &&
+            e.fromModuleId === ce.fromModuleId && e.toModuleId === ce.toModuleId
+          );
+          if (!isDup) relevantEdges.push(ce);
+        }
+      });
     }
 
     if (relevantEdges.length === 0) return null;
 
-    // Collect class IDs in the inspected module that are involved
-    const outgoingClassIds = new Set();  // inspected classes that USE target
-    const incomingClassIds = new Set();  // inspected classes that ARE USED BY target
+    // Group by what the TARGET module provides/consumes
+    // "USED FROM target": classes in TARGET that the inspected module references (outgoing from inspected)
+    // "PROVIDES TO target": classes in INSPECTED that the target module references (incoming to inspected)
+    const usedFromTarget = new Set();    // target class IDs that inspected uses
+    const providedToTarget = new Set();  // inspected class IDs that target uses
 
     relevantEdges.forEach(ce => {
       if (ce.fromModuleId === inspectedId && ce.toModuleId === targetId) {
-        outgoingClassIds.add(ce.fromClassId);
+        usedFromTarget.add(ce.toClassId);
       }
       if (ce.fromModuleId === targetId && ce.toModuleId === inspectedId) {
-        incomingClassIds.add(ce.toClassId);
+        providedToTarget.add(ce.toClassId);
       }
     });
 
-    // Build filtered packages from the inspected module's data
-    const filteredPackages = [];
-    inspectedData.packages.forEach(pkg => {
-      const outClasses = pkg.classes.filter(c => outgoingClassIds.has(c.id));
-      const inClasses = pkg.classes.filter(c => incomingClassIds.has(c.id));
-      const allClasses = [...new Map([...outClasses, ...inClasses].map(c => [c.id, c])).values()];
+    // Build sections from the TARGET's packages (for "used from")
+    const usedFromPackages = [];
+    if (targetData && usedFromTarget.size > 0) {
+      targetData.packages.forEach(pkg => {
+        const matchingClasses = pkg.classes.filter(c => usedFromTarget.has(c.id));
+        if (matchingClasses.length > 0) {
+          usedFromPackages.push({ name: pkg.name, classes: matchingClasses });
+        }
+      });
+      // Also check if target classes aren't in target's packages (boundary filtering)
+      // Add any missing classes
+      usedFromTarget.forEach(classId => {
+        const alreadyIncluded = usedFromPackages.some(p => p.classes.some(c => c.id === classId));
+        if (!alreadyIncluded) {
+          const pkg = classId.substring(0, classId.lastIndexOf('.'));
+          const simpleName = classId.substring(classId.lastIndexOf('.') + 1);
+          const existing = usedFromPackages.find(p => p.name === pkg);
+          if (existing) {
+            existing.classes.push({ id: classId, simpleName });
+          } else {
+            usedFromPackages.push({ name: pkg, classes: [{ id: classId, simpleName }] });
+          }
+        }
+      });
+    }
 
-      if (allClasses.length > 0) {
-        const hasOut = outClasses.length > 0;
-        const hasIn = inClasses.length > 0;
-        filteredPackages.push({
-          name: pkg.name,
-          classes: allClasses,
-          boundaryType: hasOut && hasIn ? 'BOTH' : hasOut ? 'OUTGOING' : 'INCOMING',
-        });
-      }
-    });
+    // Build sections from the INSPECTED's packages (for "provided to")
+    const providedToPackages = [];
+    if (inspectedData && providedToTarget.size > 0) {
+      inspectedData.packages.forEach(pkg => {
+        const matchingClasses = pkg.classes.filter(c => providedToTarget.has(c.id));
+        if (matchingClasses.length > 0) {
+          providedToPackages.push({ name: pkg.name, classes: matchingClasses });
+        }
+      });
+      providedToTarget.forEach(classId => {
+        const alreadyIncluded = providedToPackages.some(p => p.classes.some(c => c.id === classId));
+        if (!alreadyIncluded) {
+          const pkg = classId.substring(0, classId.lastIndexOf('.'));
+          const simpleName = classId.substring(classId.lastIndexOf('.') + 1);
+          const existing = providedToPackages.find(p => p.name === pkg);
+          if (existing) {
+            existing.classes.push({ id: classId, simpleName });
+          } else {
+            providedToPackages.push({ name: pkg, classes: [{ id: classId, simpleName }] });
+          }
+        }
+      });
+    }
 
     return {
-      packages: filteredPackages,
+      usedFromPackages,     // target's classes that inspected uses
+      providedToPackages,   // inspected's classes that target uses
       classEdges: relevantEdges,
     };
   }
@@ -237,14 +275,13 @@
     if (moduleId !== inspectedModuleId) return { width: NODE_W, height: NODE_H };
 
     const relData = inspectionTargetId ? getRelationshipData(inspectedModuleId, inspectionTargetId) : null;
-    if (!relData || relData.packages.length === 0) {
+    if (!relData || (relData.usedFromPackages.length === 0 && relData.providedToPackages.length === 0)) {
       return { width: 300, height: 80 };
     }
 
     const expanded = expandedPackages.get(moduleId) || new Set();
-    const packages = relData.packages;
-    const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
-    const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
+    const usedFromPkgs = relData.usedFromPackages;
+    const providedToPkgs = relData.providedToPackages;
 
     const TITLE_H = 30;
     const ZONE_LABEL_H = 18;
@@ -278,29 +315,13 @@
       };
     }
 
-    const inSize = incomingPkgs.length > 0 ? zoneSize(incomingPkgs) : { width: 0, height: 0 };
-    const outSize = outgoingPkgs.length > 0 ? zoneSize(outgoingPkgs) : { width: 0, height: 0 };
+    const usedFromSize = usedFromPkgs.length > 0 ? zoneSize(usedFromPkgs) : { width: 0, height: 0 };
+    const providedToSize = providedToPkgs.length > 0 ? zoneSize(providedToPkgs) : { width: 0, height: 0 };
 
-    const boxW = Math.max(350, inSize.width, outSize.width, PILL_W + BOX_PAD * 2);
-    const boxH = TITLE_H + inSize.height + outSize.height + BOX_PAD * 2;
+    const boxW = Math.max(350, usedFromSize.width, providedToSize.width, PILL_W + BOX_PAD * 2);
+    const boxH = TITLE_H + usedFromSize.height + providedToSize.height + BOX_PAD * 2;
 
     return { width: boxW, height: Math.max(boxH, 80) };
-  }
-
-  // ── Smart edge routing helpers ────────────────────────────────────────────
-  function classPackage(classId) {
-    const idx = classId.lastIndexOf('.');
-    return idx > 0 ? classId.substring(0, idx) : '';
-  }
-
-  function resolveEdgePos(moduleId, classId) {
-    if (moduleId !== inspectedModuleId) return nodePos[moduleId];
-    const pkg = classPackage(classId);
-    const expanded = expandedPackages.get(moduleId);
-    if (expanded && expanded.has(pkg)) {
-      return nodePos['class:' + classId] || nodePos['pkg:' + moduleId + ':' + pkg] || nodePos[moduleId];
-    }
-    return nodePos['pkg:' + moduleId + ':' + pkg] || nodePos[moduleId];
   }
 
   // ── Layout (dagre) ─────────────────────────────────────────────────────────
@@ -767,6 +788,10 @@
       const isSecondaryTrans = transitiveNodeIds !== null && isInSubgraph &&
         !isFocusEdge && !isCycle &&
         (transitiveNodeIds.has(e.from) || transitiveNodeIds.has(e.to));
+      const isInspectionEdge = inspectedModuleId && inspectionTargetId &&
+        ((e.from === inspectedModuleId && e.to === inspectionTargetId) ||
+         (e.from === inspectionTargetId && e.to === inspectedModuleId));
+      const isInspectionDimEdge = inspectedModuleId && inspectionTargetId && !isInspectionEdge;
       const srcGap = e.from === focusedId ? FOCUS_GAP : GAP;
       const tgtGap = e.to   === focusedId ? FOCUS_GAP : GAP;
 
@@ -806,6 +831,15 @@
         path.setAttribute('marker-end', 'url(#arrow-rel)');
       }
 
+      if (isInspectionDimEdge) {
+        path.setAttribute('opacity', '0.05');
+      } else if (isInspectionEdge) {
+        path.setAttribute('stroke', '#66bb6a');
+        path.setAttribute('stroke-width', '2.5');
+        path.setAttribute('opacity', '1');
+        path.setAttribute('marker-end', 'url(#arrow-class-out)');
+      }
+
       path.dataset.from = e.from; path.dataset.to = e.to;
       path.style.cursor = 'pointer';
       path.addEventListener('click', () => onEdgeClick(e.from, e.to, isCycle));
@@ -837,57 +871,6 @@
       transitiveIn.forEach(fromId  => drawTransEdge(fromId, focusedId));
     }
 
-    // ── Class-level edges for inspected module relationship ─────────────────
-    if (inspectedModuleId && inspectionTargetId) {
-      const relData = getRelationshipData(inspectedModuleId, inspectionTargetId);
-      if (relData) {
-        relData.classEdges.forEach(ce => {
-          const isFromInspected = ce.fromModuleId === inspectedModuleId;
-          const fromPos = isFromInspected
-            ? resolveEdgePos(ce.fromModuleId, ce.fromClassId)
-            : nodePos[ce.fromModuleId];
-          const toPos = isFromInspected
-            ? nodePos[ce.toModuleId]
-            : resolveEdgePos(ce.toModuleId, ce.toClassId);
-          if (!fromPos || !toPos) return;
-          if (!visibleIds.has(ce.fromModuleId) || !visibleIds.has(ce.toModuleId)) return;
-
-          const isHighlighted = highlightedClassId === ce.fromClassId || highlightedClassId === ce.toClassId;
-          // Use boundary type color: cyan for incoming to inspected, orange for outgoing from inspected
-          const isOutgoing = ce.fromModuleId === inspectedModuleId;
-          const edgeColor = isOutgoing ? '#66bb6a' : '#42a5f5';
-          // For class edges, use small gap without box-size clipping since we target specific sub-elements
-          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP, null, null);
-
-          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          path.setAttribute('d', pathD);
-          path.setAttribute('fill', 'none');
-          if (isHighlighted) {
-            path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', '2.5');
-            path.setAttribute('opacity', '1');
-          } else if (highlightedClassId) {
-            path.setAttribute('stroke', edgeColor);
-            path.setAttribute('stroke-width', '0.8');
-            path.setAttribute('opacity', '0.08');
-          } else {
-            path.setAttribute('stroke', edgeColor);
-            path.setAttribute('stroke-width', '1.5');
-            path.setAttribute('opacity', '0.8');
-          }
-          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : (isOutgoing ? 'url(#arrow-class-out)' : 'url(#arrow-class-in)'));
-          path.style.cursor = 'pointer';
-          path.addEventListener('click', () => {
-            const detail = document.getElementById('edge-detail');
-            detail.innerHTML = `<strong style="color:${edgeColor}">Class dependency</strong><br/>` +
-              `<span style="color:#aaa">${ce.fromClassId}</span><br/>` +
-              `<span style="color:#555">→</span><br/>` +
-              `<span style="color:#aaa">${ce.toClassId}</span>`;
-          });
-          edgeGroup.appendChild(path);
-        });
-      }
-    }
   }
 
   // ── Draw nodes ─────────────────────────────────────────────────────────────
@@ -908,6 +891,8 @@
       const isFocused   = m.id === focusedId;
       const isSelected  = selectedIds.has(m.id);
       const isDim       = focusedId && !visibleIds.has(m.id);
+      const isInspectionDim = inspectedModuleId && inspectionTargetId &&
+        m.id !== inspectedModuleId && m.id !== inspectionTargetId;
       const isCycleNode = cycleNodeIds.has(m.id);
       const color  = NODE_COLORS[m.type]  || NODE_COLORS.unknown;
       const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
@@ -920,11 +905,12 @@
       rect.setAttribute('x', -hw); rect.setAttribute('y', -hh);
       rect.setAttribute('width', NODE_W); rect.setAttribute('height', NODE_H);
       rect.setAttribute('rx', '5'); rect.setAttribute('fill', color);
-      const strokeColor = isFocused ? '#f5a623' : isSelected ? '#4fc3f7' : isCycleNode ? '#e53935' : border;
-      const strokeWidth = (isFocused || isSelected) ? '2.5' : isCycleNode ? '2' : '1';
+      const isInspectionTarget = m.id === inspectionTargetId;
+      const strokeColor = isInspectionTarget ? '#66bb6a' : isFocused ? '#f5a623' : isSelected ? '#4fc3f7' : isCycleNode ? '#e53935' : border;
+      const strokeWidth = (isFocused || isSelected || isInspectionTarget) ? '2.5' : isCycleNode ? '2' : '1';
       rect.setAttribute('stroke', strokeColor);
       rect.setAttribute('stroke-width', strokeWidth);
-      rect.setAttribute('opacity', isDim ? '0.12' : '1');
+      rect.setAttribute('opacity', isDim ? '0.12' : isInspectionDim ? '0.25' : '1');
 
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', 0); text.setAttribute('y', 4);
@@ -933,7 +919,7 @@
       text.setAttribute('font-family', 'monospace');
       text.setAttribute('fill', 'white');
       text.setAttribute('pointer-events', 'none');
-      text.setAttribute('opacity', isDim ? '0.12' : '1');
+      text.setAttribute('opacity', isDim ? '0.12' : isInspectionDim ? '0.25' : '1');
       text.textContent = m.id;
 
       g.appendChild(rect);
@@ -1001,7 +987,7 @@
         event.preventDefault();
         const items = [];
         if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && m.id !== inspectedModuleId) {
-          items.push({ label: 'Inspect classes', action: () => enterInspection(m.id) });
+          items.push({ label: 'Inspect', action: () => enterInspection(m.id) });
         }
         if (m.id === inspectedModuleId) {
           items.push({ label: 'Exit inspection', action: () => exitInspection() });
@@ -1055,7 +1041,7 @@
 
     const relData = inspectionTargetId ? getRelationshipData(inspectedModuleId, inspectionTargetId) : null;
 
-    if (!relData || relData.packages.length === 0) {
+    if (!relData || (relData.usedFromPackages.length === 0 && relData.providedToPackages.length === 0)) {
       // Empty state — show hint message
       const msg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       msg.setAttribute('x', 0); msg.setAttribute('y', 8);
@@ -1064,11 +1050,10 @@
       msg.textContent = inspectionTargetId ? 'No class dependencies with this module' : 'Click a module to see class dependencies';
       g.appendChild(msg);
     } else {
-      // Show filtered packages for the relationship
+      // Show target's classes grouped by zone
       const expanded = expandedPackages.get(m.id) || new Set();
-      const packages = relData.packages;
-      const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
-      const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
+      const usedFromPkgs = relData.usedFromPackages;
+      const providedToPkgs = relData.providedToPackages;
 
       // Subtitle showing which relationship
       const subtitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1078,11 +1063,11 @@
       subtitle.textContent = '\u2194 ' + inspectionTargetId;
       g.appendChild(subtitle);
 
-      function drawZone(pkgs, zoneLabel, zoneTop) {
+      function drawZone(pkgs, zoneLabel, zoneTop, zoneColor) {
         const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         label.setAttribute('x', -boxW / 2 + BOX_PAD); label.setAttribute('y', zoneTop + 12);
         label.setAttribute('font-size', '8'); label.setAttribute('font-family', 'monospace');
-        label.setAttribute('fill', '#555'); label.setAttribute('pointer-events', 'none');
+        label.setAttribute('fill', zoneColor); label.setAttribute('pointer-events', 'none');
         label.textContent = zoneLabel;
         g.appendChild(label);
 
@@ -1091,7 +1076,7 @@
         let itemIndex = 0;
 
         pkgs.forEach(pkg => {
-          const color = PILL_COLORS[pkg.boundaryType] || '#888';
+          const color = zoneColor;
 
           if (expanded.has(pkg.name)) {
             // Start expanded package on a new row
@@ -1130,7 +1115,25 @@
               clsRect.style.cursor = 'pointer';
               clsRect.addEventListener('click', (event) => {
                 event.stopPropagation();
-                highlightClass(cls.id);
+                highlightedClassId = highlightedClassId === cls.id ? null : cls.id;
+                // Show usage details in the right panel
+                const detail = document.getElementById('edge-detail');
+                const usages = relData.classEdges.filter(ce =>
+                  ce.fromClassId === cls.id || ce.toClassId === cls.id
+                );
+                const lines = usages.map(ce => {
+                  if (ce.fromClassId === cls.id) {
+                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:#aaa">${ce.toClassId.split('.').pop()}</span>`;
+                  } else {
+                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:#aaa">${ce.fromClassId.split('.').pop()}</span>`;
+                  }
+                });
+                detail.innerHTML =
+                  `<strong style="color:#e2e8f0">${cls.simpleName}</strong>` +
+                  `<div style="color:#555;font-size:9px;margin:2px 0">${cls.id}</div>` +
+                  `<hr style="border-color:#333;margin:6px 0"/>` +
+                  `<div style="line-height:1.8;font-size:10px">${lines.join('<br/>')}</div>`;
+                rerender();
               });
               g.appendChild(clsRect);
 
@@ -1187,14 +1190,14 @@
       const topZoneY = -boxH / 2 + TITLE_H;
       const bottomZoneY = -boxH / 2 + TITLE_H + halfH;
 
-      if (incomingPkgs.length > 0) {
-        drawZone(incomingPkgs, '\u25BC USED BY ' + inspectionTargetId, topZoneY);
+      if (usedFromPkgs.length > 0) {
+        drawZone(usedFromPkgs, '\u25BC USED FROM :' + inspectionTargetId, topZoneY, '#66bb6a');
       }
-      if (outgoingPkgs.length > 0) {
-        drawZone(outgoingPkgs, '\u25B2 USES ' + inspectionTargetId, bottomZoneY);
+      if (providedToPkgs.length > 0) {
+        drawZone(providedToPkgs, '\u25B2 PROVIDED TO :' + inspectionTargetId, bottomZoneY, '#42a5f5');
       }
 
-      if (incomingPkgs.length > 0 && outgoingPkgs.length > 0) {
+      if (usedFromPkgs.length > 0 && providedToPkgs.length > 0) {
         const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', bottomZoneY);
         divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', bottomZoneY);
