@@ -1612,7 +1612,7 @@
         canvas.toBlob(blob => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          const moduleName = focusedId ? focusedId.replace(/^:/, '') : null;
+          const moduleName = focusedId ? focusedId.replace(/^:/, '').replace(/:/g, '_') : null;
           const exportName = moduleName
             ? `${APP_NAME}'s graph - ${moduleName}.png`
             : `${APP_NAME}'s dependency graph.png`;
