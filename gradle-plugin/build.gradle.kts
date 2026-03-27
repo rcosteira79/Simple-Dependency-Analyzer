@@ -29,8 +29,8 @@ gradlePlugin {
         create("dependencyGraph") {
             id = "io.github.rcosteira79.dependency-graph"
             implementationClass = "io.github.rcosteira79.depgraph.DependencyGraphPlugin"
-            displayName = "Dependency Graph"
-            description = "Visualises your Gradle multi-module dependency architecture"
+            displayName = "Simple Dependency Analyser"
+            description = "Visualises and analyses your Gradle multi-module dependency architecture"
             tags = listOf("android", "dependency-graph", "architecture", "visualization")
         }
     }

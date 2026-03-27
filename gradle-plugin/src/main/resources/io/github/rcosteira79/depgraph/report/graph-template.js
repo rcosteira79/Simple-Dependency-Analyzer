@@ -1610,7 +1610,7 @@
         canvas.toBlob(blob => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          a.download = 'dependency-graph.png';
+          a.download = 'simple-dependency-analyser.png';
           a.click();
           URL.revokeObjectURL(a.href);
         }, 'image/png');
