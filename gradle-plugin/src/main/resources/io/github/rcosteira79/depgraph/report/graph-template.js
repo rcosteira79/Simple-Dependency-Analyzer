@@ -427,6 +427,7 @@
 
     const startPos = {};
     Object.keys(targetPos).forEach(id => {
+      if (!nodePos[id]) return;
       startPos[id] = { x: nodePos[id].x, y: nodePos[id].y };
     });
 
@@ -440,6 +441,7 @@
 
       Object.entries(targetPos).forEach(([id, tgt]) => {
         const s = startPos[id];
+        if (!s || !nodePos[id]) return;
         nodePos[id].x = s.x + (tgt.x - s.x) * t;
         nodePos[id].y = s.y + (tgt.y - s.y) * t;
         if (nodeElements[id]) {
@@ -1109,11 +1111,13 @@
     updateExplorer();
 
     if (focusedId) {
-      // Re-run dagre on the visible subgraph to minimise edge crossings,
-      // then animate nodes to their new positions.
       const visibleIds = getEffectiveVisibleIds();
-      const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
-      // Draw at current positions first so nodeElements is populated
+      let targetPos = {};
+      try {
+        targetPos = computeCustomSubgraphLayout(focusedId, visibleIds);
+      } catch (e) {
+        console.error('Layout computation failed:', e);
+      }
       drawEdges(visibleIds);
       drawNodes(visibleIds);
       if (Object.keys(targetPos).length > 0) animateToLayout(targetPos);
