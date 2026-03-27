@@ -29,7 +29,18 @@
 
   // Package pill dimensions
   const PILL_W = 180, PILL_H = 24;
-  const CLASS_W = 120, CLASS_H = 22;
+  const CLASS_H = 22;
+  const CHAR_W = 6.2; // approximate monospace char width at font-size 9
+  const MIN_CLASS_W = 120;
+
+  // Compute class box width from the longest class name in a set of packages
+  function classWidthForPackages(pkgList) {
+    let maxLen = 0;
+    pkgList.forEach(pkg => {
+      pkg.classes.forEach(cls => { maxLen = Math.max(maxLen, cls.simpleName.length); });
+    });
+    return Math.max(MIN_CLASS_W, maxLen * CHAR_W + 16); // 16 for padding
+  }
   const BOX_PAD = 16;
   // Mutable node positions — initialised from dagre, updated by drag/layout
   const nodePos      = {};
@@ -282,8 +293,10 @@
     const expanded = expandedPackages.get(moduleId) || new Set();
     const usedFromPkgs = relData.usedFromPackages;
     const providedToPkgs = relData.providedToPackages;
+    const allPkgs = [...usedFromPkgs, ...providedToPkgs];
+    const dynamicClassW = classWidthForPackages(allPkgs);
 
-    const TITLE_H = 30;
+    const TITLE_H = 38;
     const ZONE_LABEL_H = 18;
 
     function zoneSize(pkgs) {
@@ -297,7 +310,7 @@
           itemIndex += MAX_COLS; // header row
           const classMaxCols = Math.min(pkg.classes.length, MAX_COLS);
           const classRows = Math.ceil(pkg.classes.length / classMaxCols);
-          maxRowWidth = Math.max(maxRowWidth, classMaxCols * (CLASS_W + 8));
+          maxRowWidth = Math.max(maxRowWidth, classMaxCols * (dynamicClassW + 8));
           itemIndex += classRows * MAX_COLS;
         } else {
           itemIndex++;
@@ -311,7 +324,7 @@
 
       return {
         width: maxRowWidth + BOX_PAD * 2,
-        height: totalRows * (PILL_H + 6) + 18,
+        height: totalRows * (PILL_H + 6) + ZONE_LABEL_H,
       };
     }
 
@@ -1066,6 +1079,7 @@
       const expanded = expandedPackages.get(m.id) || new Set();
       const usedFromPkgs = relData.usedFromPackages;
       const providedToPkgs = relData.providedToPackages;
+      const dynClassW = classWidthForPackages([...usedFromPkgs, ...providedToPkgs]);
 
       // Subtitle showing which relationship
       const subtitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -1113,13 +1127,13 @@
               const col = ci % classMaxCols;
               const row = Math.floor(ci / classMaxCols);
               const classRow = Math.floor(itemIndex / MAX_COLS) + row;
-              const cx = -boxW / 2 + BOX_PAD + col * (CLASS_W + 8) + CLASS_W / 2;
+              const cx = -boxW / 2 + BOX_PAD + col * (dynClassW + 8) + dynClassW / 2;
               const cy = yBase + classRow * (PILL_H + 6) + (PILL_H - CLASS_H) / 2;
 
               const isHighlighted = highlightedClassId === cls.id;
               const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-              clsRect.setAttribute('x', cx - CLASS_W / 2); clsRect.setAttribute('y', cy);
-              clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
+              clsRect.setAttribute('x', cx - dynClassW / 2); clsRect.setAttribute('y', cy);
+              clsRect.setAttribute('width', dynClassW); clsRect.setAttribute('height', CLASS_H);
               clsRect.setAttribute('rx', '3');
               clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
               clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
