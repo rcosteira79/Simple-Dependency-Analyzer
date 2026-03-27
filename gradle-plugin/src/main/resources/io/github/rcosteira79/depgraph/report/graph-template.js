@@ -484,7 +484,7 @@
   // reachable from / able to reach the focused node (unlimited depth).
   function getEffectiveVisibleIds() {
     if (!focusedId) return new Set(data.modules.map(m => m.id));
-    if (!showTransitive) return getEffectiveVisibleIds();
+    if (!showTransitive) return getVisibleIds(focusedId, depthValue, data.modules, data.edges);
 
     const all = new Set([focusedId]);
     // Forward BFS
