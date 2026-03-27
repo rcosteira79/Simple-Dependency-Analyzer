@@ -40,7 +40,8 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
         val fullGraph = graph.copy(classData = classData)
         GraphSerializer.serialize(fullGraph, File(outputDirFile, GRAPH_JSON_FILENAME))
         HtmlReportGenerator.generate(fullGraph, File(outputDirFile, HTML_REPORT_FILENAME))
-        logger.lifecycle("Dependency graph written to ${outputDirFile.absolutePath}")
+        val reportFile = File(outputDirFile, HTML_REPORT_FILENAME)
+        logger.lifecycle("\n◈ Dependency graph report: file://${reportFile.absolutePath}\n")
     }
 
     private fun runClassAnalysis(): Map<String, ModuleClassData> {
