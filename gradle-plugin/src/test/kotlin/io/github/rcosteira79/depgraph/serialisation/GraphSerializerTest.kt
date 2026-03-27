@@ -24,6 +24,7 @@ class GraphSerializerTest {
 
         val actualGraph = Json.decodeFromString<GraphModel>(outputFile.readText())
         assertEquals(inputGraph, actualGraph)
+        assertEquals(2, actualGraph.schemaVersion)
     }
 
     @Test

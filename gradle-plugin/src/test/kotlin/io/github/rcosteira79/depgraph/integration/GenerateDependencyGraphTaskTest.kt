@@ -37,7 +37,7 @@ class GenerateDependencyGraphTaskTest {
         assertTrue(actualGraphJson.exists(), "graph.json should exist")
 
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
-        assertEquals(1, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
+        assertEquals(2, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
 
         val actualModuleIds: List<String> =
             actualGraph["modules"]!!.jsonArray.map {
@@ -67,6 +67,89 @@ class GenerateDependencyGraphTaskTest {
         val actualHtmlFile: File = File(tempDir.toFile(), "build/dep-graph/index.html")
         assertTrue(actualHtmlFile.exists(), "index.html should exist")
         assertTrue(actualHtmlFile.readText().contains("window.__GRAPH_DATA__"))
+    }
+
+    @Test
+    fun `task produces classData when modulesOnly is not set`(
+        @TempDir tempDir: Path,
+    ) {
+        copyFixture("fixture-project", tempDir.toFile())
+
+        GradleRunner
+            .create()
+            .withProjectDir(tempDir.toFile())
+            .withPluginClasspath()
+            .withArguments("generateDependencyGraph", "--stacktrace")
+            .build()
+
+        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
+
+        assertEquals(2, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
+
+        val actualClassData: JsonObject? = actualGraph["classData"]?.jsonObject
+        assertTrue(actualClassData != null, "classData should be present")
+        assertTrue(actualClassData!!.containsKey(":app"), "classData should contain :app")
+        assertTrue(actualClassData.containsKey(":core-ui"), "classData should contain :core-ui")
+    }
+
+    @Test
+    fun `classData contains boundary classes for cross-module dependency`(
+        @TempDir tempDir: Path,
+    ) {
+        copyFixture("fixture-project", tempDir.toFile())
+
+        GradleRunner
+            .create()
+            .withProjectDir(tempDir.toFile())
+            .withPluginClasspath()
+            .withArguments("generateDependencyGraph", "--stacktrace")
+            .build()
+
+        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
+        val actualClassData: JsonObject = actualGraph["classData"]!!.jsonObject
+
+        // :app should have AppMain as outgoing boundary (it uses Button from :core-ui)
+        val actualAppPackages: JsonArray = actualClassData[":app"]!!.jsonObject["packages"]!!.jsonArray
+        val actualAppClassNames: List<String> =
+            actualAppPackages.flatMap { pkg ->
+                pkg.jsonObject["classes"]!!.jsonArray.map { it.jsonObject["simpleName"]!!.jsonPrimitive.content }
+            }
+        assertTrue(actualAppClassNames.contains("AppMain"), "AppMain should be a boundary class in :app")
+
+        // :core-ui should have Button as incoming boundary (it is used by :app)
+        val actualCorePackages: JsonArray = actualClassData[":core-ui"]!!.jsonObject["packages"]!!.jsonArray
+        val actualCoreClassNames: List<String> =
+            actualCorePackages.flatMap { pkg ->
+                pkg.jsonObject["classes"]!!.jsonArray.map { it.jsonObject["simpleName"]!!.jsonPrimitive.content }
+            }
+        assertTrue(actualCoreClassNames.contains("Button"), "Button should be a boundary class in :core-ui")
+        // Theme has no cross-module refs, so it should NOT be a boundary class
+        assertTrue(!actualCoreClassNames.contains("Theme"), "Theme should not be a boundary class")
+    }
+
+    @Test
+    fun `modulesOnly flag skips class analysis`(
+        @TempDir tempDir: Path,
+    ) {
+        copyFixture("fixture-project", tempDir.toFile())
+
+        GradleRunner
+            .create()
+            .withProjectDir(tempDir.toFile())
+            .withPluginClasspath()
+            .withArguments("generateDependencyGraph", "-PmodulesOnly=true", "--stacktrace")
+            .build()
+
+        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
+
+        // classData should be absent (null → omitted from JSON)
+        assertTrue(
+            !actualGraph.containsKey("classData") || actualGraph["classData"]!!.toString() == "null",
+            "classData should be null when modulesOnly is set",
+        )
     }
 
     private fun copyFixture(

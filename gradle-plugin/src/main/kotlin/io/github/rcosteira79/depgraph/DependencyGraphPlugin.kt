@@ -8,12 +8,12 @@ private const val TASK_NAME: String = "generateDependencyGraph"
 private const val TASK_GROUP: String = "reporting"
 private const val TASK_DESCRIPTION: String = "Generates the module dependency graph report"
 private const val OUTPUT_DIR_NAME: String = "dep-graph"
+private const val MODULES_ONLY_PROPERTY: String = "modulesOnly"
 
 class DependencyGraphPlugin : Plugin<Project> {
     override fun apply(target: Project) {
-        // Register the DSL extension on every (sub)project so modules can override their type
         target.allprojects(Action { extensions.create("dependencyGraph", DependencyGraphExtension::class.java) })
-        // Register the task only on the root project
+
         if (target == target.rootProject) {
             target.tasks.register(
                 TASK_NAME,
@@ -22,8 +22,42 @@ class DependencyGraphPlugin : Plugin<Project> {
                     group = TASK_GROUP
                     description = TASK_DESCRIPTION
                     outputDir.convention(target.layout.buildDirectory.dir(OUTPUT_DIR_NAME))
+                    modulesOnly.convention(
+                        target.provider {
+                            target.findProperty(MODULES_ONLY_PROPERTY)?.toString()?.toBoolean() ?: false
+                        },
+                    )
                 },
             )
+
+            target.afterEvaluate {
+                val task = target.tasks.findByName(TASK_NAME) as? GenerateDependencyGraphTask ?: return@afterEvaluate
+                if (task.modulesOnly.get()) return@afterEvaluate
+
+                val extension: DependencyGraphExtension =
+                    target.extensions.findByType(DependencyGraphExtension::class.java) ?: return@afterEvaluate
+                val variant: String = extension.variant
+
+                target.subprojects.forEach { subproject ->
+                    subproject.afterEvaluate {
+                        val isAndroid: Boolean =
+                            subproject.pluginManager.hasPlugin("com.android.application") ||
+                                subproject.pluginManager.hasPlugin("com.android.library")
+                        val compileTaskNames: List<String> =
+                            if (isAndroid) {
+                                val capitalized: String = variant.replaceFirstChar { it.uppercase() }
+                                listOf("compile${capitalized}JavaWithJavac", "compile${capitalized}Kotlin")
+                            } else {
+                                listOf("compileJava", "compileKotlin")
+                            }
+                        compileTaskNames.forEach { taskName ->
+                            subproject.tasks.findByName(taskName)?.let { compileTask ->
+                                task.dependsOn(compileTask)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

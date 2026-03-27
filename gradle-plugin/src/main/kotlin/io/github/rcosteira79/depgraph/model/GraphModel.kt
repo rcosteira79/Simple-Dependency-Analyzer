@@ -7,8 +7,9 @@ data class GraphModel(
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION,
     val modules: List<Module>,
     val edges: List<Edge>,
+    val classData: Map<String, ModuleClassData>? = null,
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION: Int = 1
+        const val CURRENT_SCHEMA_VERSION: Int = 2
     }
 }
