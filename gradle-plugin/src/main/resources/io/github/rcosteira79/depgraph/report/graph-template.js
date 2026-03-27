@@ -7,8 +7,13 @@
   const PORT_SPACING = 14;
   const CORNER_R = 6;
   const LAYER_ORDER = ['app', 'feature', 'core', 'data', 'unknown'];
-  const NODE_COLORS  = { app:'#7b1212', feature:'#0d3461', core:'#2d0d5e', data:'#0d3318', unknown:'#2a2a2a' };
-  const NODE_BORDERS = { app:'#c62828', feature:'#1565c0', core:'#6a1fc2', data:'#2e7d32', unknown:'#555' };
+  const NODE_COLORS_DARK   = { app:'#7b1212', feature:'#0d3461', core:'#2d0d5e', data:'#0d3318', unknown:'#2a2a2a' };
+  const NODE_BORDERS_DARK  = { app:'#c62828', feature:'#1565c0', core:'#6a1fc2', data:'#2e7d32', unknown:'#555' };
+  const NODE_COLORS_LIGHT  = { app:'#ffcdd2', feature:'#bbdefb', core:'#e1bee7', data:'#c8e6c9', unknown:'#e0e0e0' };
+  const NODE_BORDERS_LIGHT = { app:'#e53935', feature:'#1976d2', core:'#8e24aa', data:'#43a047', unknown:'#999' };
+  function isLight() { return document.documentElement.classList.contains('light'); }
+  function getNodeColors()  { return isLight() ? NODE_COLORS_LIGHT  : NODE_COLORS_DARK; }
+  function getNodeBorders() { return isLight() ? NODE_BORDERS_LIGHT : NODE_BORDERS_DARK; }
   const OPPOSITE_SIDE = { bottom:'top', top:'bottom', right:'left', left:'right' };
 
   let focusedId   = null;
@@ -851,10 +856,10 @@
       } else {
         // All other edges: dim when there is a focus
         const opacity = !isInSubgraph ? '0.05' : focusedId ? '0.15' : '1';
-        path.setAttribute('stroke', 'rgba(255,255,255,0.25)');
+        path.setAttribute('stroke', isLight() ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.25)');
         path.setAttribute('stroke-width', '1.2');
         path.setAttribute('opacity', opacity);
-        path.setAttribute('marker-end', 'url(#arrow-rel)');
+        path.setAttribute('marker-end', isLight() ? 'url(#arrow-rel-light)' : 'url(#arrow-rel)');
       }
 
       if (isInspectionDimEdge) {
@@ -928,8 +933,8 @@
       const isInspectionDim = inspectedModuleId && inspectionTargetId &&
         m.id !== inspectedModuleId && m.id !== inspectionTargetId;
       const isCycleNode = cycleNodeIds.has(m.id);
-      const color  = NODE_COLORS[m.type]  || NODE_COLORS.unknown;
-      const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
+      const color  = getNodeColors()[m.type]  || getNodeColors().unknown;
+      const border = getNodeBorders()[m.type] || getNodeBorders().unknown;
 
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
@@ -1048,7 +1053,7 @@
     const boxH = boxSize.height;
 
     // Dashed bounding box
-    const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
+    const border = getNodeBorders()[m.type] || getNodeBorders().unknown;
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     const isLightTheme = document.documentElement.classList.contains('light');
     rect.setAttribute('x', -boxW / 2); rect.setAttribute('y', -boxH / 2);
@@ -1508,6 +1513,19 @@
       rerender();
     });
 
+    // ── Inter-dependencies toggle (next to transitive) ──────────────────────
+    const btnInterDeps = document.createElement('button');
+    btnInterDeps.className = 'tb-btn'; btnInterDeps.id = 'btn-interdeps';
+    btnInterDeps.textContent = 'Inter-deps: Off';
+    btnInterDeps.title = 'Highlight all edges between visible modules';
+    depthCtrl.parentNode.insertBefore(btnInterDeps, depthCtrl);
+    btnInterDeps.addEventListener('click', () => {
+      showInterDeps = !showInterDeps;
+      btnInterDeps.textContent = `Inter-deps: ${showInterDeps ? 'On' : 'Off'}`;
+      btnInterDeps.style.color = showInterDeps ? '#66bb6a' : '';
+      rerender();
+    });
+
     // ── Layout mode toggle ─────────────────────────────────────────────────────
     const btnLayoutMode = document.createElement('button');
     btnLayoutMode.className = 'tb-btn'; btnLayoutMode.id = 'btn-layout-mode';
@@ -1546,8 +1564,9 @@
     depthCtrl.parentNode.insertBefore(btnTheme, depthCtrl);
     btnTheme.addEventListener('click', () => {
       document.documentElement.classList.toggle('light');
-      const isLight = document.documentElement.classList.contains('light');
-      btnTheme.textContent = isLight ? '\uD83C\uDF19 Dark' : '\u2600 Light';
+      const isLightNow = document.documentElement.classList.contains('light');
+      btnTheme.textContent = isLightNow ? '\uD83C\uDF19 Dark' : '\u2600 Light';
+      rerender();
     });
 
     // ── PNG export ──────────────────────────────────────────────────────────
@@ -1599,18 +1618,6 @@
       img.src = url;
     });
 
-    // ── Inter-dependencies toggle ───────────────────────────────────────────
-    const btnInterDeps = document.createElement('button');
-    btnInterDeps.className = 'tb-btn'; btnInterDeps.id = 'btn-interdeps';
-    btnInterDeps.textContent = 'Inter-deps: Off';
-    btnInterDeps.title = 'Highlight all edges between visible modules';
-    depthCtrl.parentNode.insertBefore(btnInterDeps, depthCtrl);
-    btnInterDeps.addEventListener('click', () => {
-      showInterDeps = !showInterDeps;
-      btnInterDeps.textContent = `Inter-deps: ${showInterDeps ? 'On' : 'Off'}`;
-      btnInterDeps.style.color = showInterDeps ? '#66bb6a' : '';
-      rerender();
-    });
 
     // ── Panel / toolbar wiring ────────────────────────────────────────────────
     document.getElementById('tab-type').addEventListener('click', () => {

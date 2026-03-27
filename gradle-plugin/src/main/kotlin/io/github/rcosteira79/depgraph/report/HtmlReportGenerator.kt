@@ -100,6 +100,9 @@ object HtmlReportGenerator {
                   <marker id="arrow-rel" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
                     <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="rgba(255,255,255,0.35)"/>
                   </marker>
+                  <marker id="arrow-rel-light" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
+                    <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="rgba(0,0,0,0.35)"/>
+                  </marker>
                   <marker id="arrow-lit" markerWidth="8" markerHeight="7" refX="7" refY="3.5" orient="auto">
                     <path d="M0,0.5 L7,3.5 L0,6.5 Z" fill="#f5a623"/>
                   </marker>
