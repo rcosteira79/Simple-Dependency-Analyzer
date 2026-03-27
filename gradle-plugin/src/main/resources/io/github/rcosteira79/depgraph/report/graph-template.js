@@ -860,19 +860,24 @@
 
       let dragMoved   = false;
       let prevDragPos = null;
+      let dragOrigin  = null;
 
       const drag = d3.drag()
         .on('start', function (event) {
           dragMoved   = false;
           prevDragPos = { x: event.x, y: event.y };
+          dragOrigin  = { x: event.x, y: event.y };
           d3.select(this).raise();
         })
         .on('drag', function (event) {
-          dragMoved = true;
+          const totalDx = event.x - dragOrigin.x;
+          const totalDy = event.y - dragOrigin.y;
+          if (Math.abs(totalDx) > 3 || Math.abs(totalDy) > 3) dragMoved = true;
           const dx = event.x - prevDragPos.x;
           const dy = event.y - prevDragPos.y;
           prevDragPos = { x: event.x, y: event.y };
 
+          if (!dragMoved) return; // don't move until threshold exceeded
           const idsToMove = selectedIds.has(m.id) ? selectedIds : new Set([m.id]);
           idsToMove.forEach(id => {
             nodePos[id].x += dx;
@@ -885,6 +890,7 @@
         })
         .on('end', function () {
           prevDragPos = null;
+          dragOrigin  = null;
           if (!dragMoved) onNodeClick(m.id);
         });
 
@@ -1330,12 +1336,12 @@
     // ── Edge mode toggle ──────────────────────────────────────────────────────
     const btnEdge = document.createElement('button');
     btnEdge.className = 'tb-btn'; btnEdge.id = 'btn-edge-mode';
-    btnEdge.textContent = '⤡ Bent';
+    btnEdge.textContent = 'Arrow Style: Bent';
     btnEdge.title = 'Toggle straight / orthogonal edge routing';
     depthCtrl.parentNode.insertBefore(btnEdge, depthCtrl);
     btnEdge.addEventListener('click', () => {
       edgeMode = edgeMode === 'straight' ? 'orthogonal' : 'straight';
-      btnEdge.textContent = edgeMode === 'straight' ? '⤡ Bent' : '⟶ Straight';
+      btnEdge.textContent = edgeMode === 'straight' ? 'Arrow Style: Bent' : 'Arrow Style: Straight';
       rerender();
     });
 
