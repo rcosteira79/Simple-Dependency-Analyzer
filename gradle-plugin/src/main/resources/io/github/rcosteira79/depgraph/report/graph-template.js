@@ -1218,25 +1218,36 @@
         });
       }
 
-      const TITLE_H = 38;  // title + subtitle
-      const halfH = (boxH - TITLE_H) / 2;
-      const topZoneY = -boxH / 2 + TITLE_H;
-      const bottomZoneY = -boxH / 2 + TITLE_H + halfH;
+      const TITLE_H = 38;
+      let zoneY = -boxH / 2 + TITLE_H;
 
       if (usedFromPkgs.length > 0) {
-        drawZone(usedFromPkgs, '\u25BC USED FROM :' + inspectionTargetId, topZoneY, '#66bb6a');
-      }
-      if (providedToPkgs.length > 0) {
-        drawZone(providedToPkgs, '\u25B2 PROVIDED TO :' + inspectionTargetId, bottomZoneY, '#42a5f5');
+        drawZone(usedFromPkgs, '\u25BC USED FROM ' + inspectionTargetId, zoneY, '#66bb6a');
+        const usedFromSize = getUnfoldedBoxSize(m.id);  // recalc not ideal but safe
+        // Advance by the actual used-from zone height
+        const expandedSet = expandedPackages.get(m.id) || new Set();
+        let usedIdx = 0;
+        usedFromPkgs.forEach(pkg => {
+          if (expandedSet.has(pkg.name)) {
+            if (usedIdx % 8 !== 0) usedIdx = Math.ceil(usedIdx / 8) * 8;
+            usedIdx += 8;
+            usedIdx += Math.ceil(pkg.classes.length / Math.min(pkg.classes.length, 8)) * 8;
+          } else { usedIdx++; }
+        });
+        zoneY += Math.ceil(usedIdx / 8) * (PILL_H + 6) + 24;
       }
 
       if (usedFromPkgs.length > 0 && providedToPkgs.length > 0) {
         const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', bottomZoneY);
-        divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', bottomZoneY);
+        divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', zoneY - 4);
+        divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', zoneY - 4);
         divider.setAttribute('stroke', '#444'); divider.setAttribute('stroke-width', '0.5');
         divider.setAttribute('stroke-dasharray', '3,3');
         g.appendChild(divider);
+      }
+
+      if (providedToPkgs.length > 0) {
+        drawZone(providedToPkgs, '\u25B2 PROVIDED TO ' + inspectionTargetId, zoneY, '#42a5f5');
       }
     }
 
