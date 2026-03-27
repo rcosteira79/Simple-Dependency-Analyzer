@@ -45,15 +45,18 @@ object HtmlReportGenerator {
             :root {
               --bg: #121220; --surface: #1e1e1e; --surface2: #2b2b2b; --border: #3c3c3c;
               --text: #ccc; --text-dim: #888; --text-faint: #555; --accent: #4fc3f7;
+              --btn-bg: #4c5052; --btn-hover: #5c6062;
             }
             :root.light {
               --bg: #f5f5f5; --surface: #ffffff; --surface2: #e8e8e8; --border: #ddd;
               --text: #333; --text-dim: #666; --text-faint: #999; --accent: #0288d1;
+              --btn-bg: #d0d0d0; --btn-hover: #bbb;
             }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }
             #toolbar { background: var(--surface2); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-            .tb-btn { background: #4c5052; border: none; border-radius: 3px; color: var(--text); padding: 4px 12px; font-size: 11px; cursor: pointer; }
+            .tb-btn { background: var(--btn-bg); border: none; border-radius: 3px; color: var(--text); padding: 4px 12px; font-size: 11px; cursor: pointer; }
+            .tb-btn:hover { background: var(--btn-hover); }
             #depth-control { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11px; }
             #main { display: flex; flex: 1; overflow: hidden; }
             #explorer { width: 200px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); }
