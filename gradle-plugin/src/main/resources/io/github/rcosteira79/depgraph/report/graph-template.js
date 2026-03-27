@@ -1612,8 +1612,9 @@
         canvas.toBlob(blob => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          const exportName = focusedId
-            ? `${APP_NAME}'s graph - ${focusedId}.png`
+          const moduleName = focusedId ? focusedId.replace(/^:/, '') : null;
+          const exportName = moduleName
+            ? `${APP_NAME}'s graph - ${moduleName}.png`
             : `${APP_NAME}'s dependency graph.png`;
           a.download = exportName;
           a.click();
