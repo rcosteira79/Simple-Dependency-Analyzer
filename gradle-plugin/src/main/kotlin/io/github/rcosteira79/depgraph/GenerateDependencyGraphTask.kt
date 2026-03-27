@@ -25,6 +25,11 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
     @get:Input
     abstract val modulesOnly: Property<Boolean>
 
+    init {
+        // Always regenerate so the report link is printed. The task is fast after compilation.
+        outputs.upToDateWhen { false }
+    }
+
     @TaskAction
     fun generate() {
         val outputDirFile: File = outputDir.get().asFile
