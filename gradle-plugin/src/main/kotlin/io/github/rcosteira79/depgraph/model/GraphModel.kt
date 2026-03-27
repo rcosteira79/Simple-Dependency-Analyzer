@@ -5,6 +5,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class GraphModel(
     val schemaVersion: Int = CURRENT_SCHEMA_VERSION,
+    val appName: String? = null,
     val modules: List<Module>,
     val edges: List<Edge>,
     val classData: Map<String, ModuleClassData>? = null,

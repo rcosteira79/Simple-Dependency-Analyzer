@@ -80,7 +80,7 @@ object HtmlReportGenerator {
         </head>
         <body>
           <div id="toolbar">
-            <span style="font-weight:bold;color:#4fc3f7">◈ Simple Dependency Analyser</span>
+            <span id="app-title" style="font-weight:bold;color:var(--accent)">◈ Simple Dependency Analyser</span>
             <button class="tb-btn" id="btn-reset">↺ Reset</button>
             <button class="tb-btn" id="btn-fit">⤢ Fit</button>
             <div id="depth-control">

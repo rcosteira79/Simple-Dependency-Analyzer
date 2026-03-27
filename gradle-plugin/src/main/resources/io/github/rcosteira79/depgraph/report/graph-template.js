@@ -2,6 +2,8 @@
   const data = window.__GRAPH_DATA__;
   if (!data) { document.body.innerHTML = '<p style="color:red">No graph data found.</p>'; return; }
 
+  const APP_NAME = data.appName || 'Project';
+
   // ── Constants ──────────────────────────────────────────────────────────────
   const NODE_W = 140, NODE_H = 32, GAP = 8, FOCUS_GAP = 10;
   const PORT_SPACING = 14;
@@ -1610,7 +1612,10 @@
         canvas.toBlob(blob => {
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
-          a.download = 'simple-dependency-analyser.png';
+          const exportName = focusedId
+            ? `${APP_NAME}'s graph - ${focusedId}.png`
+            : `${APP_NAME}'s dependency graph.png`;
+          a.download = exportName;
           a.click();
           URL.revokeObjectURL(a.href);
         }, 'image/png');
@@ -1691,6 +1696,11 @@
       });
       document.addEventListener('mouseup', () => { isResizing = false; });
     }
+
+    // Set app name in toolbar and page title
+    const appTitleEl = document.getElementById('app-title');
+    if (appTitleEl) appTitleEl.textContent = `◈ ${APP_NAME}`;
+    document.title = `${APP_NAME} — Simple Dependency Analyser`;
 
     updateExplorer();
     render();

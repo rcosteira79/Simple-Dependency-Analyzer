@@ -42,7 +42,8 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
                 runClassAnalysis()
             }
 
-        val fullGraph = graph.copy(classData = classData)
+        val appName: String? = resolveAppName(project.rootProject)
+        val fullGraph = graph.copy(appName = appName, classData = classData)
         GraphSerializer.serialize(fullGraph, File(outputDirFile, GRAPH_JSON_FILENAME))
         HtmlReportGenerator.generate(fullGraph, File(outputDirFile, HTML_REPORT_FILENAME))
         val reportFile = File(outputDirFile, HTML_REPORT_FILENAME)
@@ -96,5 +97,36 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
                 File(buildDir, "classes/kotlin/main"),
             )
         }
+    }
+
+    private fun resolveAppName(rootProject: org.gradle.api.Project): String? {
+        val appProject: org.gradle.api.Project =
+            rootProject.subprojects
+                .firstOrNull { it.pluginManager.hasPlugin("com.android.application") }
+                ?: return rootProject.name
+
+        val manifestFile: File = File(appProject.projectDir, "src/main/AndroidManifest.xml")
+        if (!manifestFile.exists()) return appProject.name
+
+        val manifestText: String = manifestFile.readText()
+        val labelMatch: MatchResult =
+            Regex("""android:label\s*=\s*"([^"]+)"""").find(manifestText)
+                ?: return appProject.name
+
+        val labelValue: String = labelMatch.groupValues[1]
+
+        if (!labelValue.startsWith("@string/")) return labelValue
+
+        val stringName: String = labelValue.removePrefix("@string/")
+        val stringsFile: File = File(appProject.projectDir, "src/main/res/values/strings.xml")
+        if (!stringsFile.exists()) return appProject.name
+
+        val stringsText: String = stringsFile.readText()
+        val stringMatch: MatchResult =
+            Regex("""<string\s+name\s*=\s*"${Regex.escape(stringName)}"\s*>([^<]+)</string>""")
+                .find(stringsText)
+                ?: return appProject.name
+
+        return stringMatch.groupValues[1]
     }
 }
