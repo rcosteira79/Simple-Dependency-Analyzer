@@ -70,8 +70,8 @@ object HtmlReportGenerator {
             <button class="tb-btn" id="btn-reset">↺ Reset</button>
             <button class="tb-btn" id="btn-fit">⤢ Fit</button>
             <div id="depth-control">
-              Depth <input id="depth-slider" type="range" min="1" max="5" value="2" style="width:80px">
-              <span id="depth-value" style="color:#4fc3f7;font-weight:bold">2</span>
+              Depth <input id="depth-slider" type="range" min="1" max="5" value="1" style="width:80px">
+              <span id="depth-value" style="color:#4fc3f7;font-weight:bold">1</span>
             </div>
           </div>
           <div id="main">

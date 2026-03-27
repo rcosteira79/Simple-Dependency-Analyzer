@@ -12,7 +12,7 @@
   const OPPOSITE_SIDE = { bottom:'top', top:'bottom', right:'left', left:'right' };
 
   let focusedId   = null;
-  let depthValue  = 2;
+  let depthValue  = 1;
   let edgeMode    = 'straight'; // 'straight' | 'orthogonal'
   let selectedIds = new Set();
   let isAnimating = false;
@@ -179,40 +179,115 @@
     });
   }
 
-  // Run dagre on the visible subgraph and return new positions centred so
-  // the focused node lands at the middle of the current viewport.
-  // All visible nodes (including the focused one) are animated to their
-  // new positions, so the neighbourhood always radiates around the focus.
-  function computeSubgraphLayout(focusId, visibleIds) {
-    const visMods  = data.modules.filter(m => visibleIds.has(m.id));
-    const visEdges = data.edges.filter(e => visibleIds.has(e.from) && visibleIds.has(e.to));
+  // Custom subgraph layout: BFS forward/backward from the focused node.
+  // Dependencies (forward edges) are placed below; dependents (reverse edges)
+  // are placed above.  Uses barycenter heuristic to minimise crossings.
+  function computeCustomSubgraphLayout(focusId, visibleIds) {
+    const LAYER_SEP = 170;
+    const NODE_SEP  = 220;
 
-    // Extra nodesep/ranksep gives dagre more room to minimise crossings.
-    const g = buildDagreGraph(visMods, visEdges, { nodesep: 120, ranksep: 160, marginx: 60, marginy: 60 });
-
-    const rawPos = {};
-    visMods.forEach(m => {
-      const n = g.node(m.id);
-      if (n) rawPos[m.id] = { x: n.x, y: n.y };
+    // Local acyclic adjacency within visible set
+    const succs = {}, preds = {};
+    visibleIds.forEach(id => { succs[id] = []; preds[id] = []; });
+    data.edges.forEach(e => {
+      if (!visibleIds.has(e.from) || !visibleIds.has(e.to)) return;
+      if (cycleEdgeKeys.has(`${e.from}|${e.to}`)) return;
+      succs[e.from].push(e.to);
+      preds[e.to].push(e.from);
     });
 
-    const focusDagre = rawPos[focusId];
-    if (!focusDagre) return {};
+    // Classify: isFwd = reachable forward; isBwd = can reach focusId
+    const isFwd = new Set([focusId]);
+    { const q = [focusId]; let qi = 0;
+      while (qi < q.length)
+        succs[q[qi++]].forEach(n => { if (!isFwd.has(n)) { isFwd.add(n); q.push(n); } }); }
 
-    // Convert the current viewport centre to content-space coordinates so
-    // we can place the focused node there regardless of zoom / pan state.
+    const isBwd = new Set([focusId]);
+    { const q = [focusId]; let qi = 0;
+      while (qi < q.length)
+        preds[q[qi++]].forEach(n => { if (!isBwd.has(n)) { isBwd.add(n); q.push(n); } }); }
+
+    // Assign layers — BFS forward: shortest-path depth
+    const layerOf = { [focusId]: 0 };
+
+    const qF = [focusId]; let qFi = 0;
+    while (qFi < qF.length) {
+      const curr = qF[qFi++];
+      succs[curr].forEach(next => {
+        if (isFwd.has(next) && layerOf[next] === undefined) {
+          layerOf[next] = (layerOf[curr] ?? 0) + 1;
+          qF.push(next);
+        }
+      });
+    }
+    // BFS backward: shortest reverse-path depth
+    const qB = [focusId]; let qBi = 0;
+    while (qBi < qB.length) {
+      const curr = qB[qBi++];
+      preds[curr].forEach(prev => {
+        if (isBwd.has(prev) && layerOf[prev] === undefined) {
+          layerOf[prev] = (layerOf[curr] ?? 0) - 1;
+          qB.push(prev);
+        }
+      });
+    }
+    visibleIds.forEach(id => { if (layerOf[id] === undefined) layerOf[id] = 0; });
+
+    // Group by layer
+    const layerGroups = {};
+    visibleIds.forEach(id => {
+      const l = layerOf[id] ?? 0;
+      (layerGroups[l] = layerGroups[l] || []).push(id);
+    });
+
+    // Initial ordering: by current X so animation looks smooth
+    Object.values(layerGroups).forEach(g =>
+      g.sort((a, b) => (nodePos[a]?.x ?? 0) - (nodePos[b]?.x ?? 0))
+    );
+
+    // Viewport centre in content-space
     const svgEl = document.getElementById('graph-svg');
     const { width: svgW, height: svgH } = svgEl.getBoundingClientRect();
-    const tf = d3.zoomTransform(svgEl);
+    const tf   = d3.zoomTransform(svgEl);
     const vpCx = (svgW / 2 - tf.x) / tf.k;
     const vpCy = (svgH / 2 - tf.y) / tf.k;
 
-    const offX = vpCx - focusDagre.x;
-    const offY = vpCy - focusDagre.y;
+    // Initial X assignment
+    const xOf = {};
+    const layers = Object.keys(layerGroups).map(Number).sort((a, b) => a - b);
+    layers.forEach(l => {
+      const g = layerGroups[l], n = g.length;
+      g.forEach((id, i) => { xOf[id] = vpCx + (i - (n - 1) / 2) * NODE_SEP; });
+    });
 
+    // Barycenter heuristic (3 passes)
+    for (let pass = 0; pass < 3; pass++) {
+      layers.forEach(l => {
+        const g = layerGroups[l];
+        if (g.length <= 1) return;
+        const scores = g.map(id => {
+          const nbX = [];
+          data.edges.forEach(e => {
+            if (e.from === id && xOf[e.to]   !== undefined) nbX.push(xOf[e.to]);
+            if (e.to   === id && xOf[e.from] !== undefined) nbX.push(xOf[e.from]);
+          });
+          return nbX.length ? nbX.reduce((a, b) => a + b, 0) / nbX.length : xOf[id];
+        });
+        const paired = g.map((id, i) => ({ id, score: scores[i] }));
+        paired.sort((a, b) => a.score - b.score);
+        const n = paired.length;
+        paired.forEach((item, i) => {
+          xOf[item.id]      = vpCx + (i - (n - 1) / 2) * NODE_SEP;
+          layerGroups[l][i] = item.id;
+        });
+      });
+    }
+
+    // Build result
     const result = {};
-    Object.entries(rawPos).forEach(([id, p]) => {
-      result[id] = { x: p.x + offX, y: p.y + offY };
+    visibleIds.forEach(id => {
+      const l = layerOf[id] ?? 0;
+      result[id] = { x: xOf[id] ?? vpCx, y: vpCy + l * LAYER_SEP };
     });
     return result;
   }
@@ -753,7 +828,7 @@
       // Re-run dagre on the visible subgraph to minimise edge crossings,
       // then animate nodes to their new positions.
       const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
-      const targetPos  = computeSubgraphLayout(focusedId, visibleIds);
+      const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
       // Draw at current positions first so nodeElements is populated
       drawEdges(visibleIds);
       drawNodes(visibleIds);
@@ -935,7 +1010,7 @@
       // Re-layout if a node is focused so the new depth neighbourhood is organised
       if (focusedId) {
         const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
-        const targetPos  = computeSubgraphLayout(focusedId, visibleIds);
+        const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
         drawEdges(visibleIds);
         drawNodes(visibleIds);
         if (Object.keys(targetPos).length > 0) animateToLayout(targetPos);
@@ -967,6 +1042,25 @@
 
     updateExplorer();
     render();
-    setTimeout(() => document.getElementById('btn-fit').click(), 50);
+    setTimeout(() => {
+      // Auto-focus the first app module (alphabetically) so the graph opens
+      // with a meaningful layout rather than the raw dagre view.
+      const firstApp = data.modules
+        .filter(m => m.type === 'app')
+        .sort((a, b) => a.id.localeCompare(b.id))[0];
+      if (firstApp) {
+        focusedId = firstApp.id;
+        updateExplorer();
+        const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+        const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
+        // Snap to final positions — no animation on startup
+        Object.entries(targetPos).forEach(([id, p]) => {
+          if (nodePos[id]) { nodePos[id].x = p.x; nodePos[id].y = p.y; }
+        });
+        drawEdges(visibleIds);
+        drawNodes(visibleIds);
+      }
+      document.getElementById('btn-fit').click();
+    }, 50);
   });
 })();
