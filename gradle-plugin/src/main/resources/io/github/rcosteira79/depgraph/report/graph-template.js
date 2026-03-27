@@ -511,12 +511,24 @@
       });
     }
 
-    // Build result
+    // Build result — visible nodes get their computed positions
     const result = {};
     visibleIds.forEach(id => {
       const l = layerOf[id] ?? 0;
       result[id] = { x: xOf[id] ?? vpCx, y: vpCy + l * LAYER_SEP };
     });
+
+    // Push non-visible modules far below the subgraph so they don't overlap
+    const maxY = Math.max(...Object.values(result).map(p => p.y));
+    const OFFSCREEN_GAP = 600;
+    let offIdx = 0;
+    data.modules.forEach(m => {
+      if (!visibleIds.has(m.id) && nodePos[m.id]) {
+        result[m.id] = { x: vpCx + (offIdx - 3) * NODE_SEP * 0.6, y: maxY + OFFSCREEN_GAP + Math.floor(offIdx / 7) * 200 };
+        offIdx++;
+      }
+    });
+
     return result;
   }
 
