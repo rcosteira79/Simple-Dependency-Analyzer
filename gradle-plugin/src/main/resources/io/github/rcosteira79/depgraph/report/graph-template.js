@@ -15,6 +15,7 @@
   let depthValue  = 1;
   let edgeMode    = 'straight'; // 'straight' | 'orthogonal'
   let showTransitive      = false;
+  let subgraphLayoutMode  = 'flat';     // 'flat' (BFS rows) | 'deep' (longest-path)
   let selectedIds = new Set();
   let isAnimating = false;
 
@@ -72,18 +73,29 @@
   document.addEventListener('click', hideContextMenu);
 
   // ── Unfold / collapse / highlight logic ─────────────────────────────────
+  function cleanUpSubPositions(moduleId) {
+    Object.keys(nodePos).forEach(key => {
+      if (key.startsWith('pkg:' + moduleId + ':') || key.startsWith('class:')) {
+        delete nodePos[key];
+      }
+    });
+  }
+
   function unfoldModule(moduleId) {
     if (!hasClassData || !data.classData[moduleId]) return;
     unfoldedModules.set(moduleId, data.classData[moduleId]);
     expandedPackages.set(moduleId, new Set());
     highlightedClassId = null;
+    computeLayout(data.modules, data.edges);
     rerender();
   }
 
   function collapseModule(moduleId) {
+    cleanUpSubPositions(moduleId);
     unfoldedModules.delete(moduleId);
     expandedPackages.delete(moduleId);
     highlightedClassId = null;
+    computeLayout(data.modules, data.edges);
     rerender();
   }
 
@@ -96,6 +108,7 @@
       expanded.add(packageName);
     }
     expandedPackages.set(moduleId, expanded);
+    computeLayout(data.modules, data.edges);
     rerender();
   }
 
@@ -148,6 +161,63 @@
     cycleNodeIds.add(b);
   });
 
+  // ── Unfolded box size computation ─────────────────────────────────────────
+  function getUnfoldedBoxSize(moduleId) {
+    const classDataEntry = unfoldedModules.get(moduleId);
+    if (!classDataEntry) return { width: NODE_W, height: NODE_H };
+    const expanded = expandedPackages.get(moduleId) || new Set();
+    const packages = classDataEntry.packages;
+
+    const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
+    const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
+
+    const ZONE_PAD = 12;
+    const TITLE_H = 30;
+    const ZONE_LABEL_H = 18;
+
+    function zoneSize(pkgs) {
+      let rowW = 0;
+      let maxExpandedH = 0;
+      let hasExpanded = false;
+      pkgs.forEach(pkg => {
+        if (expanded.has(pkg.name)) {
+          hasExpanded = true;
+          const cols = Math.min(pkg.classes.length, 3);
+          const rows = Math.ceil(pkg.classes.length / 3);
+          rowW += cols * (CLASS_W + 8) + 16;
+          maxExpandedH = Math.max(maxExpandedH, 20 + rows * (CLASS_H + 4));
+        } else {
+          rowW += PILL_W + 8;
+        }
+      });
+      const h = hasExpanded ? maxExpandedH + PILL_H + 10 : PILL_H + 6;
+      return { width: rowW + ZONE_PAD * 2, height: h + ZONE_LABEL_H };
+    }
+
+    const inSize = incomingPkgs.length > 0 ? zoneSize(incomingPkgs) : { width: 0, height: 0 };
+    const outSize = outgoingPkgs.length > 0 ? zoneSize(outgoingPkgs) : { width: 0, height: 0 };
+
+    const boxW = Math.max(400, inSize.width, outSize.width, PILL_W + BOX_PAD * 2);
+    const boxH = TITLE_H + inSize.height + outSize.height + BOX_PAD * 2;
+
+    return { width: boxW, height: Math.max(boxH, NODE_H) };
+  }
+
+  // ── Smart edge routing helpers ────────────────────────────────────────────
+  function classPackage(classId) {
+    const idx = classId.lastIndexOf('.');
+    return idx > 0 ? classId.substring(0, idx) : '';
+  }
+
+  function resolveEdgePos(moduleId, classId) {
+    const pkg = classPackage(classId);
+    const expanded = expandedPackages.get(moduleId);
+    if (expanded && expanded.has(pkg)) {
+      return nodePos['class:' + classId] || nodePos['pkg:' + moduleId + ':' + pkg] || nodePos[moduleId];
+    }
+    return nodePos['pkg:' + moduleId + ':' + pkg] || nodePos[moduleId];
+  }
+
   // ── Layout (dagre) ─────────────────────────────────────────────────────────
   function buildDagreGraph(modules, edges, opts = {}) {
     const g = new dagre.graphlib.Graph();
@@ -160,7 +230,11 @@
     });
     g.setDefaultEdgeLabel(() => ({}));
     modules.forEach(m => {
-      const attrs = { width: NODE_W, height: NODE_H };
+      const unfoldSize = unfoldedModules.has(m.id) ? getUnfoldedBoxSize(m.id) : null;
+      const attrs = {
+        width:  unfoldSize ? unfoldSize.width  : NODE_W,
+        height: unfoldSize ? unfoldSize.height : NODE_H
+      };
       // Hint dagre to place app-type modules at the minimum (topmost) rank
       if (moduleById[m.id]?.type === 'app') attrs.rank = 'min';
       g.setNode(m.id, attrs);
@@ -185,7 +259,10 @@
   // are placed above.  Uses barycenter heuristic to minimise crossings.
   function computeCustomSubgraphLayout(focusId, visibleIds) {
     const LAYER_SEP = 170;
-    const NODE_SEP  = 220;
+    const BASE_NODE_SEP = 220;
+    // Use wider separation when any visible node is unfolded
+    const hasUnfolded = [...visibleIds].some(id => unfoldedModules.has(id));
+    const NODE_SEP = hasUnfolded ? Math.max(BASE_NODE_SEP, 450) : BASE_NODE_SEP;
 
     // Local acyclic adjacency within visible set
     const succs = {}, preds = {};
@@ -208,31 +285,75 @@
       while (qi < q.length)
         preds[q[qi++]].forEach(n => { if (!isBwd.has(n)) { isBwd.add(n); q.push(n); } }); }
 
-    // Assign layers — BFS forward: shortest-path depth
+    // Assign layers
     const layerOf = { [focusId]: 0 };
 
-    const qF = [focusId]; let qFi = 0;
-    while (qFi < qF.length) {
-      const curr = qF[qFi++];
-      succs[curr].forEach(next => {
-        if (isFwd.has(next) && layerOf[next] === undefined) {
-          layerOf[next] = (layerOf[curr] ?? 0) + 1;
-          qF.push(next);
-        }
+    if (subgraphLayoutMode === 'flat') {
+      // BFS forward: shortest-path depth
+      const qF = [focusId]; let qFi = 0;
+      while (qFi < qF.length) {
+        const curr = qF[qFi++];
+        succs[curr].forEach(next => {
+          if (isFwd.has(next) && layerOf[next] === undefined) {
+            layerOf[next] = (layerOf[curr] ?? 0) + 1;
+            qF.push(next);
+          }
+        });
+      }
+      // BFS backward: shortest reverse-path depth
+      const qB = [focusId]; let qBi = 0;
+      while (qBi < qB.length) {
+        const curr = qB[qBi++];
+        preds[curr].forEach(prev => {
+          if (isBwd.has(prev) && layerOf[prev] === undefined) {
+            layerOf[prev] = (layerOf[curr] ?? 0) - 1;
+            qB.push(prev);
+          }
+        });
+      }
+      visibleIds.forEach(id => { if (layerOf[id] === undefined) layerOf[id] = 0; });
+    } else {
+      // 'deep' — longest-path DP forward
+      const fwdDepth = {};
+      isFwd.forEach(id => { fwdDepth[id] = 0; });
+      const inDegF = {};
+      isFwd.forEach(id => { inDegF[id] = 0; });
+      isFwd.forEach(id => succs[id].forEach(n => { if (isFwd.has(n)) inDegF[n]++; }));
+      inDegF[focusId] = 0;
+      const qF2 = [focusId]; let qF2i = 0;
+      while (qF2i < qF2.length) {
+        const curr = qF2[qF2i++];
+        succs[curr].forEach(next => {
+          if (!isFwd.has(next)) return;
+          if ((fwdDepth[curr] ?? 0) + 1 > (fwdDepth[next] ?? 0))
+            fwdDepth[next] = (fwdDepth[curr] ?? 0) + 1;
+          if (--inDegF[next] === 0 && next !== focusId) qF2.push(next);
+        });
+      }
+      // Longest-path DP backward
+      const bwdDepth = {};
+      isBwd.forEach(id => { bwdDepth[id] = 0; });
+      const inDegB = {};
+      isBwd.forEach(id => { inDegB[id] = 0; });
+      isBwd.forEach(id => preds[id].forEach(n => { if (isBwd.has(n)) inDegB[n]++; }));
+      inDegB[focusId] = 0;
+      const qB2 = [focusId]; let qB2i = 0;
+      while (qB2i < qB2.length) {
+        const curr = qB2[qB2i++];
+        preds[curr].forEach(prev => {
+          if (!isBwd.has(prev)) return;
+          if ((bwdDepth[curr] ?? 0) + 1 > (bwdDepth[prev] ?? 0))
+            bwdDepth[prev] = (bwdDepth[curr] ?? 0) + 1;
+          if (--inDegB[prev] === 0 && prev !== focusId) qB2.push(prev);
+        });
+      }
+      visibleIds.forEach(id => {
+        if (id === focusId) return;
+        if (isFwd.has(id))      layerOf[id] =  (fwdDepth[id] ?? 1);
+        else if (isBwd.has(id)) layerOf[id] = -(bwdDepth[id] ?? 1);
+        else                    layerOf[id] = 0;
       });
     }
-    // BFS backward: shortest reverse-path depth
-    const qB = [focusId]; let qBi = 0;
-    while (qBi < qB.length) {
-      const curr = qB[qBi++];
-      preds[curr].forEach(prev => {
-        if (isBwd.has(prev) && layerOf[prev] === undefined) {
-          layerOf[prev] = (layerOf[curr] ?? 0) - 1;
-          qB.push(prev);
-        }
-      });
-    }
-    visibleIds.forEach(id => { if (layerOf[id] === undefined) layerOf[id] = 0; });
 
     // Group by layer
     const layerGroups = {};
@@ -624,8 +745,12 @@
     if (unfoldedModules.size > 0) {
       unfoldedModules.forEach((classDataEntry, moduleId) => {
         classDataEntry.classEdges.forEach(ce => {
-          const fromPos = nodePos[ce.fromModuleId];
-          const toPos = nodePos[ce.toModuleId];
+          const fromPos = unfoldedModules.has(ce.fromModuleId)
+            ? resolveEdgePos(ce.fromModuleId, ce.fromClassId)
+            : nodePos[ce.fromModuleId];
+          const toPos = unfoldedModules.has(ce.toModuleId)
+            ? resolveEdgePos(ce.toModuleId, ce.toClassId)
+            : nodePos[ce.toModuleId];
           if (!fromPos || !toPos) return;
           if (!visibleIds.has(ce.fromModuleId) || !visibleIds.has(ce.toModuleId)) return;
 
@@ -796,21 +921,15 @@
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
     nodeElements[m.id] = g;
 
-    // Compute box dimensions
-    let totalHeight = 30; // title area
-    let maxWidth = PILL_W + BOX_PAD * 2;
-    packages.forEach(pkg => {
-      if (expanded.has(pkg.name)) {
-        totalHeight += 20 + pkg.classes.length * (CLASS_H + 4);
-        maxWidth = Math.max(maxWidth, CLASS_W + BOX_PAD * 2 + 20);
-      } else {
-        totalHeight += PILL_H + 6;
-      }
-    });
-    totalHeight += BOX_PAD;
+    // Classify packages into incoming (top) and outgoing (bottom) zones
+    const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
+    const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
+
+    const boxSize = getUnfoldedBoxSize(m.id);
+    const boxW = boxSize.width;
+    const boxH = boxSize.height;
 
     // Dashed bounding box
-    const boxW = maxWidth, boxH = totalHeight;
     const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.setAttribute('x', -boxW / 2); rect.setAttribute('y', -boxH / 2);
@@ -837,69 +956,118 @@
     });
     g.appendChild(title);
 
-    // Package pills / expanded classes
-    let yOffset = -boxH / 2 + 30;
-    packages.forEach(pkg => {
-      const color = PILL_COLORS[pkg.boundaryType] || '#888';
-      if (expanded.has(pkg.name)) {
-        // Package header (collapsible)
-        const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        header.setAttribute('x', -boxW / 2 + BOX_PAD); header.setAttribute('y', yOffset + 12);
-        header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
-        header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
-        header.textContent = `▾ ${pkg.name}`;
-        header.addEventListener('click', () => togglePackage(m.id, pkg.name));
-        g.appendChild(header);
-        yOffset += 20;
+    // Draw a zone of packages (either incoming or outgoing)
+    function drawZone(pkgs, zoneLabel, zoneTop) {
+      // Zone label
+      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      label.setAttribute('x', -boxW / 2 + BOX_PAD); label.setAttribute('y', zoneTop + 12);
+      label.setAttribute('font-size', '8'); label.setAttribute('font-family', 'monospace');
+      label.setAttribute('fill', '#555'); label.setAttribute('pointer-events', 'none');
+      label.textContent = zoneLabel;
+      g.appendChild(label);
 
-        // Class nodes
-        pkg.classes.forEach(cls => {
-          const isHighlighted = highlightedClassId === cls.id;
-          const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          clsRect.setAttribute('x', -CLASS_W / 2); clsRect.setAttribute('y', yOffset);
-          clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
-          clsRect.setAttribute('rx', '3');
-          clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
-          clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
-          clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
-          clsRect.style.cursor = 'pointer';
-          clsRect.addEventListener('click', () => highlightClass(cls.id));
-          g.appendChild(clsRect);
+      let xCursor = -boxW / 2 + BOX_PAD;
+      const yBase = zoneTop + 20;
 
-          const clsText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          clsText.setAttribute('x', 0); clsText.setAttribute('y', yOffset + 14);
-          clsText.setAttribute('text-anchor', 'middle'); clsText.setAttribute('font-size', '9');
-          clsText.setAttribute('font-family', 'monospace');
-          clsText.setAttribute('fill', isHighlighted ? '#fff' : '#aaa');
-          clsText.setAttribute('pointer-events', 'none');
-          clsText.textContent = cls.simpleName;
-          g.appendChild(clsText);
+      pkgs.forEach(pkg => {
+        const color = PILL_COLORS[pkg.boundaryType] || '#888';
 
-          yOffset += CLASS_H + 4;
-        });
-      } else {
-        // Collapsed pill
-        const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        pill.setAttribute('x', -PILL_W / 2); pill.setAttribute('y', yOffset);
-        pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
-        pill.setAttribute('rx', PILL_H / 2); pill.setAttribute('fill', '#1a1a2e');
-        pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '1');
-        pill.style.cursor = 'pointer';
-        pill.addEventListener('click', () => togglePackage(m.id, pkg.name));
-        g.appendChild(pill);
+        if (expanded.has(pkg.name)) {
+          // Package header
+          const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          header.setAttribute('x', xCursor); header.setAttribute('y', yBase + 12);
+          header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
+          header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
+          header.textContent = `▾ ${pkg.name.split('.').slice(-2).join('.')}`;
+          header.addEventListener('click', () => togglePackage(m.id, pkg.name));
+          g.appendChild(header);
 
-        const pillText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        pillText.setAttribute('x', 0); pillText.setAttribute('y', yOffset + 15);
-        pillText.setAttribute('text-anchor', 'middle'); pillText.setAttribute('font-size', '9');
-        pillText.setAttribute('font-family', 'monospace'); pillText.setAttribute('fill', color);
-        pillText.setAttribute('pointer-events', 'none');
-        const shortPkg = pkg.name.split('.').slice(-2).join('.');
-        pillText.textContent = `${shortPkg} (${pkg.classes.length})`;
-        g.appendChild(pillText);
+          // Classes in a grid (max 3 columns)
+          const cols = Math.min(pkg.classes.length, 3);
+          pkg.classes.forEach((cls, ci) => {
+            const col = ci % cols;
+            const row = Math.floor(ci / cols);
+            const cx = xCursor + col * (CLASS_W + 8) + CLASS_W / 2;
+            const cy = yBase + 20 + row * (CLASS_H + 4);
 
-        yOffset += PILL_H + 6;
-      }
-    });
+            const isHighlighted = highlightedClassId === cls.id;
+            const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            clsRect.setAttribute('x', cx - CLASS_W / 2); clsRect.setAttribute('y', cy);
+            clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
+            clsRect.setAttribute('rx', '3');
+            clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
+            clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
+            clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
+            clsRect.style.cursor = 'pointer';
+            clsRect.addEventListener('click', () => highlightClass(cls.id));
+            g.appendChild(clsRect);
+
+            const clsText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            clsText.setAttribute('x', cx); clsText.setAttribute('y', cy + 14);
+            clsText.setAttribute('text-anchor', 'middle'); clsText.setAttribute('font-size', '9');
+            clsText.setAttribute('font-family', 'monospace');
+            clsText.setAttribute('fill', isHighlighted ? '#fff' : '#aaa');
+            clsText.setAttribute('pointer-events', 'none');
+            clsText.textContent = cls.simpleName;
+            g.appendChild(clsText);
+
+            // Store absolute position for edge routing
+            nodePos['class:' + cls.id] = { x: pos.x + cx, y: pos.y + cy + CLASS_H / 2 };
+          });
+
+          xCursor += Math.min(pkg.classes.length, 3) * (CLASS_W + 8) + 16;
+        } else {
+          // Collapsed pill
+          const pillX = xCursor;
+          const pillY = yBase;
+          const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+          pill.setAttribute('x', pillX); pill.setAttribute('y', pillY);
+          pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
+          pill.setAttribute('rx', PILL_H / 2); pill.setAttribute('fill', '#1a1a2e');
+          pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '1');
+          pill.style.cursor = 'pointer';
+          pill.addEventListener('click', () => togglePackage(m.id, pkg.name));
+          g.appendChild(pill);
+
+          const pillText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          pillText.setAttribute('x', pillX + PILL_W / 2); pillText.setAttribute('y', pillY + 15);
+          pillText.setAttribute('text-anchor', 'middle'); pillText.setAttribute('font-size', '9');
+          pillText.setAttribute('font-family', 'monospace'); pillText.setAttribute('fill', color);
+          pillText.setAttribute('pointer-events', 'none');
+          const shortPkg = pkg.name.split('.').slice(-2).join('.');
+          pillText.textContent = `${shortPkg} (${pkg.classes.length})`;
+          g.appendChild(pillText);
+
+          // Store absolute position for edge routing
+          nodePos['pkg:' + m.id + ':' + pkg.name] = { x: pos.x + pillX + PILL_W / 2, y: pos.y + pillY + PILL_H / 2 };
+
+          xCursor += PILL_W + 8;
+        }
+      });
+    }
+
+    // Layout: incoming zone in top half, outgoing zone in bottom half
+    const titleH = 30;
+    const halfH = (boxH - titleH) / 2;
+    const topZoneY = -boxH / 2 + titleH;
+    const bottomZoneY = -boxH / 2 + titleH + halfH;
+
+    if (incomingPkgs.length > 0) {
+      drawZone(incomingPkgs, '▼ INCOMING', topZoneY);
+    }
+    if (outgoingPkgs.length > 0) {
+      drawZone(outgoingPkgs, '▲ OUTGOING', bottomZoneY);
+    }
+
+    // Divider line between zones
+    if (incomingPkgs.length > 0 && outgoingPkgs.length > 0) {
+      const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', bottomZoneY);
+      divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', bottomZoneY);
+      divider.setAttribute('stroke', '#444'); divider.setAttribute('stroke-width', '0.5');
+      divider.setAttribute('stroke-dasharray', '3,3');
+      g.appendChild(divider);
+    }
 
     nodeGroup.appendChild(g);
 
@@ -910,6 +1078,7 @@
         nodePos[m.id].x += event.dx;
         nodePos[m.id].y += event.dy;
         d3.select(g).attr('transform', `translate(${nodePos[m.id].x},${nodePos[m.id].y})`);
+        // Update sub-positions for pills/classes
         drawEdges(getEffectiveVisibleIds());
       });
     d3.select(g).call(drag);
@@ -1138,6 +1307,24 @@
       btnTrans.textContent = `Transitive: ${showTransitive ? 'On' : 'Off'}`;
       btnTrans.style.color = showTransitive ? '#c084fc' : '';
       rerender();
+    });
+
+    // ── Layout mode toggle ─────────────────────────────────────────────────────
+    const btnLayoutMode = document.createElement('button');
+    btnLayoutMode.className = 'tb-btn'; btnLayoutMode.id = 'btn-layout-mode';
+    btnLayoutMode.textContent = 'Layout: Flat';
+    btnLayoutMode.title = 'Flat: all direct deps in one row. Deep: longest-path layers.';
+    depthCtrl.parentNode.insertBefore(btnLayoutMode, depthCtrl);
+    btnLayoutMode.addEventListener('click', () => {
+      subgraphLayoutMode = subgraphLayoutMode === 'flat' ? 'deep' : 'flat';
+      btnLayoutMode.textContent = `Layout: ${subgraphLayoutMode === 'flat' ? 'Flat' : 'Deep'}`;
+      if (focusedId) {
+        const visibleIds = getEffectiveVisibleIds();
+        const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
+        drawEdges(visibleIds);
+        drawNodes(visibleIds);
+        if (Object.keys(targetPos).length > 0) animateToLayout(targetPos);
+      }
     });
 
     // ── Edge mode toggle ──────────────────────────────────────────────────────
