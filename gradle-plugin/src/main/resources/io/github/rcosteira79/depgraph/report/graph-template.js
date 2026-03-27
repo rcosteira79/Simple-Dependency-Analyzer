@@ -88,7 +88,6 @@
     inspectionTargetId = null;
     expandedPackages.clear();
     highlightedClassId = null;
-    computeLayout(data.modules, data.edges);
     rerender();
   }
 
@@ -98,7 +97,6 @@
     inspectionTargetId = null;
     expandedPackages.clear();
     highlightedClassId = null;
-    computeLayout(data.modules, data.edges);
     rerender();
   }
 
