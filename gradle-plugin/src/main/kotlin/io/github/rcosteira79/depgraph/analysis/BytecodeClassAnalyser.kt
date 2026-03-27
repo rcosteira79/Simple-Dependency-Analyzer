@@ -71,7 +71,7 @@ class BytecodeClassAnalyser(
             )
 
         val refs: MutableSet<String> = mutableSetOf()
-        classReader.accept(ReferenceCollector(refs), ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
+        classReader.accept(ReferenceCollector(refs), ClassReader.SKIP_FRAMES)
 
         val filteredRefs: Set<String> =
             refs
@@ -100,6 +100,29 @@ private class ReferenceCollector(
     ) {
         superName?.let { addInternalName(it) }
         interfaces?.forEach { addInternalName(it) }
+    }
+
+    override fun visitSource(
+        source: String?,
+        debug: String?,
+    ) {
+        // Parse Kotlin SMAP debug info to find inlined function origins.
+        // SMAP format contains lines like: "+ 2 SomeFile.kt\ncom/example/SomeClassKt"
+        // which indicate code was inlined from that class.
+        if (debug != null && debug.contains("*F")) {
+            val lines: List<String> = debug.split("\n")
+            var i: Int = 0
+            while (i < lines.size) {
+                val trimmed: String = lines[i].trimStart()
+                if (trimmed.startsWith("+ ") && !trimmed.startsWith("+ 1 ") && i + 1 < lines.size) {
+                    val classLine: String = lines[i + 1].trim()
+                    if (classLine.contains("/") && !classLine.startsWith("kotlin/")) {
+                        addInternalName(classLine)
+                    }
+                }
+                i++
+            }
+        }
     }
 
     override fun visitAnnotation(
