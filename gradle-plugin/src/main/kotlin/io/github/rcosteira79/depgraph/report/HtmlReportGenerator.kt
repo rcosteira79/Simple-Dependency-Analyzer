@@ -42,29 +42,37 @@ object HtmlReportGenerator {
           <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
           <script src="https://cdn.jsdelivr.net/npm/@dagrejs/dagre@1/dist/dagre.min.js"></script>
           <style>
+            :root {
+              --bg: #121220; --surface: #1e1e1e; --surface2: #2b2b2b; --border: #3c3c3c;
+              --text: #ccc; --text-dim: #888; --text-faint: #555; --accent: #4fc3f7;
+            }
+            :root.light {
+              --bg: #f5f5f5; --surface: #ffffff; --surface2: #e8e8e8; --border: #ddd;
+              --text: #333; --text-dim: #666; --text-faint: #999; --accent: #0288d1;
+            }
             * { box-sizing: border-box; margin: 0; padding: 0; }
-            body { background: #121220; color: #ccc; font-family: -apple-system, sans-serif; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }
-            #toolbar { background: #2b2b2b; padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #3c3c3c; flex-shrink: 0; }
-            .tb-btn { background: #4c5052; border: none; border-radius: 3px; color: #ccc; padding: 4px 12px; font-size: 11px; cursor: pointer; }
+            body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }
+            #toolbar { background: var(--surface2); padding: 8px 12px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+            .tb-btn { background: #4c5052; border: none; border-radius: 3px; color: var(--text); padding: 4px 12px; font-size: 11px; cursor: pointer; }
             #depth-control { display: flex; align-items: center; gap: 6px; margin-left: auto; font-size: 11px; }
             #main { display: flex; flex: 1; overflow: hidden; }
-            #explorer { width: 200px; flex-shrink: 0; border-right: 1px solid #3c3c3c; display: flex; flex-direction: column; background: #1e1e1e; }
-            #explorer-tabs { display: flex; border-bottom: 1px solid #3c3c3c; }
-            .ex-tab { flex: 1; text-align: center; padding: 6px; font-size: 11px; color: #888; cursor: pointer; border-bottom: 2px solid transparent; }
-            .ex-tab.active { color: #4fc3f7; border-bottom-color: #4fc3f7; }
-            #explorer-filter { margin: 6px; background: #2a2a2a; border: none; border-radius: 3px; color: #ccc; padding: 5px 8px; font-size: 11px; width: calc(100% - 12px); outline: none; }
+            #explorer { width: 200px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); }
+            #explorer-tabs { display: flex; border-bottom: 1px solid var(--border); }
+            .ex-tab { flex: 1; text-align: center; padding: 6px; font-size: 11px; color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent; }
+            .ex-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+            #explorer-filter { margin: 6px; background: var(--surface2); border: none; border-radius: 3px; color: var(--text); padding: 5px 8px; font-size: 11px; width: calc(100% - 12px); outline: none; }
             #explorer-list { flex: 1; overflow-y: auto; }
-            .ex-section { font-size: 9px; color: #555; text-transform: uppercase; letter-spacing: 1px; padding: 8px 8px 2px; }
-            .ex-item { padding: 4px 10px; cursor: pointer; border-left: 2px solid transparent; font-family: monospace; font-size: 10px; color: #aaa; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-            .ex-item:hover { background: #272727; }
-            .ex-item.selected { background: #0d3a5e; border-left-color: #4fc3f7; color: #4fc3f7; }
+            .ex-section { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; padding: 8px 8px 2px; }
+            .ex-item { padding: 4px 10px; cursor: pointer; border-left: 2px solid transparent; font-family: monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+            .ex-item:hover { background: var(--surface2); }
+            .ex-item.selected { background: #0d3a5e; border-left-color: var(--accent); color: var(--accent); }
             #graph-container { flex: 1; overflow: hidden; position: relative; }
             #graph-svg { width: 100%; height: 100%; display: block; }
             #detail-wrapper { display: flex; flex-shrink: 0; }
-            #detail-resize { width: 4px; cursor: col-resize; background: #3c3c3c; flex-shrink: 0; }
-            #detail-resize:hover { background: #4fc3f7; }
-            #detail { width: 240px; min-width: 120px; max-width: 600px; flex-shrink: 0; border-left: 1px solid #3c3c3c; background: #1e1e1e; padding: 10px; font-size: 11px; overflow-y: auto; }
-            #edge-detail { color: #aaa; font-size: 10px; line-height: 1.6; word-break: break-all; }
+            #detail-resize { width: 4px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
+            #detail-resize:hover { background: var(--accent); }
+            #detail { width: 240px; min-width: 120px; max-width: 600px; flex-shrink: 0; border-left: 1px solid var(--border); background: var(--surface); padding: 10px; font-size: 11px; overflow-y: auto; }
+            #edge-detail { color: var(--text-dim); font-size: 10px; line-height: 1.6; word-break: break-all; }
           </style>
         </head>
         <body>

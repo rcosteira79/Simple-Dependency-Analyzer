@@ -18,6 +18,7 @@
   let subgraphLayoutMode  = 'flat';     // 'flat' (BFS rows) | 'deep' (longest-path)
   let selectedIds = new Set();
   let isAnimating = false;
+  let showInterDeps = false;
 
   // ── Inspection state ──────────────────────────────────────────────────────
   let inspectedModuleId   = null;    // module being inspected (shown as bounding box)
@@ -865,6 +866,14 @@
         path.setAttribute('marker-end', 'url(#arrow-class-out)');
       }
 
+      // When inter-deps mode is on, highlight all edges within the visible subgraph
+      if (showInterDeps && focusedId && isInSubgraph && !isCycle && !isFocusEdge) {
+        path.setAttribute('stroke', '#66bb6a');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('opacity', '0.6');
+        path.setAttribute('marker-end', 'url(#arrow-class-out)');
+      }
+
       path.dataset.from = e.from; path.dataset.to = e.to;
       path.style.cursor = 'pointer';
       path.addEventListener('click', () => onEdgeClick(e.from, e.to, isCycle));
@@ -937,12 +946,13 @@
       rect.setAttribute('stroke-width', strokeWidth);
       rect.setAttribute('opacity', isDim ? '0.12' : isInspectionDim ? '0.25' : '1');
 
+      const isLightTheme = document.documentElement.classList.contains('light');
       const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
       text.setAttribute('x', 0); text.setAttribute('y', 4);
       text.setAttribute('text-anchor', 'middle');
       text.setAttribute('font-size', '10');
       text.setAttribute('font-family', 'monospace');
-      text.setAttribute('fill', 'white');
+      text.setAttribute('fill', isLightTheme ? '#333' : 'white');
       text.setAttribute('pointer-events', 'none');
       text.setAttribute('opacity', isDim ? '0.12' : isInspectionDim ? '0.25' : '1');
       text.textContent = m.id;
@@ -1040,9 +1050,10 @@
     // Dashed bounding box
     const border = NODE_BORDERS[m.type] || NODE_BORDERS.unknown;
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const isLightTheme = document.documentElement.classList.contains('light');
     rect.setAttribute('x', -boxW / 2); rect.setAttribute('y', -boxH / 2);
     rect.setAttribute('width', boxW); rect.setAttribute('height', boxH);
-    rect.setAttribute('rx', '8'); rect.setAttribute('fill', 'rgba(30,30,30,0.85)');
+    rect.setAttribute('rx', '8'); rect.setAttribute('fill', isLightTheme ? 'rgba(255,255,255,0.92)' : 'rgba(30,30,30,0.85)');
     rect.setAttribute('stroke', border); rect.setAttribute('stroke-width', '1.5');
     rect.setAttribute('stroke-dasharray', '6,3');
     rect.setAttribute('opacity', isDim ? '0.12' : '1');
@@ -1052,7 +1063,7 @@
     const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
     title.setAttribute('x', 0); title.setAttribute('y', -boxH / 2 + 18);
     title.setAttribute('text-anchor', 'middle'); title.setAttribute('font-size', '10');
-    title.setAttribute('font-family', 'monospace'); title.setAttribute('fill', '#888');
+    title.setAttribute('font-family', 'monospace'); title.setAttribute('fill', isLightTheme ? '#444' : '#888');
     title.setAttribute('opacity', isDim ? '0.12' : '1');
     title.textContent = m.id;
     title.style.cursor = 'pointer';
@@ -1527,6 +1538,80 @@
       rerender();
     });
 
+    // ── Theme toggle ──────────────────────────────────────────────────────────
+    const btnTheme = document.createElement('button');
+    btnTheme.className = 'tb-btn'; btnTheme.id = 'btn-theme';
+    btnTheme.textContent = '\u2600 Light';
+    btnTheme.title = 'Toggle dark/light theme';
+    depthCtrl.parentNode.insertBefore(btnTheme, depthCtrl);
+    btnTheme.addEventListener('click', () => {
+      document.documentElement.classList.toggle('light');
+      const isLight = document.documentElement.classList.contains('light');
+      btnTheme.textContent = isLight ? '\uD83C\uDF19 Dark' : '\u2600 Light';
+    });
+
+    // ── PNG export ──────────────────────────────────────────────────────────
+    const btnExport = document.createElement('button');
+    btnExport.className = 'tb-btn'; btnExport.id = 'btn-export';
+    btnExport.textContent = '\uD83D\uDCF7 Export PNG';
+    btnExport.title = 'Export current view as PNG';
+    depthCtrl.parentNode.insertBefore(btnExport, depthCtrl);
+    btnExport.addEventListener('click', () => {
+      const svgEl = document.getElementById('graph-svg');
+      const svgRect = svgEl.getBoundingClientRect();
+
+      // Clone the SVG and inline styles
+      const clone = svgEl.cloneNode(true);
+      clone.setAttribute('width', svgRect.width);
+      clone.setAttribute('height', svgRect.height);
+
+      // Add background
+      const isLight = document.documentElement.classList.contains('light');
+      const bgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      bgRect.setAttribute('width', '100%');
+      bgRect.setAttribute('height', '100%');
+      bgRect.setAttribute('fill', isLight ? '#f5f5f5' : '#121220');
+      clone.insertBefore(bgRect, clone.firstChild);
+
+      const svgData = new XMLSerializer().serializeToString(clone);
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+      const url = URL.createObjectURL(svgBlob);
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = 2; // retina
+        canvas.width = svgRect.width * scale;
+        canvas.height = svgRect.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0, svgRect.width, svgRect.height);
+        URL.revokeObjectURL(url);
+
+        canvas.toBlob(blob => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'dependency-graph.png';
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }, 'image/png');
+      };
+      img.src = url;
+    });
+
+    // ── Inter-dependencies toggle ───────────────────────────────────────────
+    const btnInterDeps = document.createElement('button');
+    btnInterDeps.className = 'tb-btn'; btnInterDeps.id = 'btn-interdeps';
+    btnInterDeps.textContent = 'Inter-deps: Off';
+    btnInterDeps.title = 'Highlight all edges between visible modules';
+    depthCtrl.parentNode.insertBefore(btnInterDeps, depthCtrl);
+    btnInterDeps.addEventListener('click', () => {
+      showInterDeps = !showInterDeps;
+      btnInterDeps.textContent = `Inter-deps: ${showInterDeps ? 'On' : 'Off'}`;
+      btnInterDeps.style.color = showInterDeps ? '#66bb6a' : '';
+      rerender();
+    });
+
     // ── Panel / toolbar wiring ────────────────────────────────────────────────
     document.getElementById('tab-type').addEventListener('click', () => {
       explorerMode = 'type';
@@ -1562,6 +1647,7 @@
       inspectionTargetId = null;
       expandedPackages.clear();
       highlightedClassId = null;
+      showInterDeps = false;
       updateExplorer();
       rerender();
     });
