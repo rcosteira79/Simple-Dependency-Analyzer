@@ -1612,7 +1612,10 @@
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           const moduleName = focusedId ? focusedId.replace(/^:/, '').replace(/:/g, '_') : null;
-          const exportName = moduleName
+          const targetName = inspectionTargetId ? inspectionTargetId.replace(/^:/, '').replace(/:/g, '_') : null;
+          const exportName = moduleName && targetName
+            ? `${APP_NAME}'s graph - ${moduleName} -> ${targetName}.png`
+            : moduleName
             ? `${APP_NAME}'s graph - ${moduleName}.png`
             : `${APP_NAME}'s dependency graph.png`;
           a.download = exportName;
