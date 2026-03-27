@@ -19,9 +19,10 @@
   let selectedIds = new Set();
   let isAnimating = false;
 
-  // ── Unfold state ──────────────────────────────────────────────────────────
-  const unfoldedModules   = new Map();  // moduleId → classData entry
-  const expandedPackages  = new Map();  // moduleId → Set of expanded package names
+  // ── Inspection state ──────────────────────────────────────────────────────
+  let inspectedModuleId   = null;    // module being inspected (shown as bounding box)
+  let inspectionTargetId  = null;    // module we're viewing relationship with
+  const expandedPackages  = new Map(); // inspectedModuleId → Set of expanded package names
   let highlightedClassId  = null;
 
   const hasClassData = !!(data.classData && Object.keys(data.classData).length > 0);
@@ -72,44 +73,116 @@
 
   document.addEventListener('click', hideContextMenu);
 
-  // ── Unfold / collapse / highlight logic ─────────────────────────────────
-  function cleanUpSubPositions(moduleId) {
+  // ── Inspection / highlight logic ────────────────────────────────────────
+  function cleanUpSubPositions() {
     Object.keys(nodePos).forEach(key => {
-      if (key.startsWith('pkg:' + moduleId + ':') || key.startsWith('class:')) {
+      if (key.startsWith('pkg:') || key.startsWith('class:')) {
         delete nodePos[key];
       }
     });
   }
 
-  function unfoldModule(moduleId) {
+  function enterInspection(moduleId) {
     if (!hasClassData || !data.classData[moduleId]) return;
-    unfoldedModules.set(moduleId, data.classData[moduleId]);
-    expandedPackages.set(moduleId, new Set());
+    inspectedModuleId = moduleId;
+    inspectionTargetId = null;
+    expandedPackages.clear();
     highlightedClassId = null;
     computeLayout(data.modules, data.edges);
     rerender();
   }
 
-  function collapseModule(moduleId) {
-    cleanUpSubPositions(moduleId);
-    unfoldedModules.delete(moduleId);
-    expandedPackages.delete(moduleId);
+  function exitInspection() {
+    cleanUpSubPositions();
+    inspectedModuleId = null;
+    inspectionTargetId = null;
+    expandedPackages.clear();
     highlightedClassId = null;
     computeLayout(data.modules, data.edges);
     rerender();
   }
 
-  function togglePackage(moduleId, packageName) {
-    const expanded = expandedPackages.get(moduleId) || new Set();
+  function setInspectionTarget(targetId) {
+    if (targetId === inspectedModuleId) return;
+    cleanUpSubPositions();
+    inspectionTargetId = targetId;
+    expandedPackages.clear();
+    highlightedClassId = null;
+    rerender();
+  }
+
+  function togglePackage(packageName) {
+    if (!inspectedModuleId) return;
+    const expanded = expandedPackages.get(inspectedModuleId) || new Set();
     if (expanded.has(packageName)) {
       expanded.delete(packageName);
       highlightedClassId = null;
     } else {
       expanded.add(packageName);
     }
-    expandedPackages.set(moduleId, expanded);
-    computeLayout(data.modules, data.edges);
+    expandedPackages.set(inspectedModuleId, expanded);
     rerender();
+  }
+
+  function getRelationshipData(inspectedId, targetId) {
+    const inspectedData = data.classData[inspectedId];
+    if (!inspectedData || !targetId) return null;
+
+    // Find class edges between inspected and target modules (both directions)
+    const relevantEdges = inspectedData.classEdges.filter(ce =>
+      (ce.fromModuleId === inspectedId && ce.toModuleId === targetId) ||
+      (ce.fromModuleId === targetId && ce.toModuleId === inspectedId)
+    );
+
+    if (relevantEdges.length === 0) {
+      // Also check target's class data for edges back to inspected
+      const targetData = data.classData[targetId];
+      if (targetData) {
+        const reverseEdges = targetData.classEdges.filter(ce =>
+          (ce.fromModuleId === targetId && ce.toModuleId === inspectedId) ||
+          (ce.fromModuleId === inspectedId && ce.toModuleId === targetId)
+        );
+        relevantEdges.push(...reverseEdges);
+      }
+    }
+
+    if (relevantEdges.length === 0) return null;
+
+    // Collect class IDs in the inspected module that are involved
+    const outgoingClassIds = new Set();  // inspected classes that USE target
+    const incomingClassIds = new Set();  // inspected classes that ARE USED BY target
+
+    relevantEdges.forEach(ce => {
+      if (ce.fromModuleId === inspectedId && ce.toModuleId === targetId) {
+        outgoingClassIds.add(ce.fromClassId);
+      }
+      if (ce.fromModuleId === targetId && ce.toModuleId === inspectedId) {
+        incomingClassIds.add(ce.toClassId);
+      }
+    });
+
+    // Build filtered packages from the inspected module's data
+    const filteredPackages = [];
+    inspectedData.packages.forEach(pkg => {
+      const outClasses = pkg.classes.filter(c => outgoingClassIds.has(c.id));
+      const inClasses = pkg.classes.filter(c => incomingClassIds.has(c.id));
+      const allClasses = [...new Map([...outClasses, ...inClasses].map(c => [c.id, c])).values()];
+
+      if (allClasses.length > 0) {
+        const hasOut = outClasses.length > 0;
+        const hasIn = inClasses.length > 0;
+        filteredPackages.push({
+          name: pkg.name,
+          classes: allClasses,
+          boundaryType: hasOut && hasIn ? 'BOTH' : hasOut ? 'OUTGOING' : 'INCOMING',
+        });
+      }
+    });
+
+    return {
+      packages: filteredPackages,
+      classEdges: relevantEdges,
+    };
   }
 
   function highlightClass(classId) {
@@ -163,15 +236,18 @@
 
   // ── Unfolded box size computation ─────────────────────────────────────────
   function getUnfoldedBoxSize(moduleId) {
-    const classDataEntry = unfoldedModules.get(moduleId);
-    if (!classDataEntry) return { width: NODE_W, height: NODE_H };
-    const expanded = expandedPackages.get(moduleId) || new Set();
-    const packages = classDataEntry.packages;
+    if (moduleId !== inspectedModuleId) return { width: NODE_W, height: NODE_H };
 
+    const relData = inspectionTargetId ? getRelationshipData(inspectedModuleId, inspectionTargetId) : null;
+    if (!relData || relData.packages.length === 0) {
+      return { width: 300, height: 80 };
+    }
+
+    const expanded = expandedPackages.get(moduleId) || new Set();
+    const packages = relData.packages;
     const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
     const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
 
-    const ZONE_PAD = 12;
     const TITLE_H = 30;
     const ZONE_LABEL_H = 18;
 
@@ -191,16 +267,16 @@
         }
       });
       const h = hasExpanded ? maxExpandedH + PILL_H + 10 : PILL_H + 6;
-      return { width: rowW + ZONE_PAD * 2, height: h + ZONE_LABEL_H };
+      return { width: rowW + BOX_PAD * 2, height: h + ZONE_LABEL_H };
     }
 
     const inSize = incomingPkgs.length > 0 ? zoneSize(incomingPkgs) : { width: 0, height: 0 };
     const outSize = outgoingPkgs.length > 0 ? zoneSize(outgoingPkgs) : { width: 0, height: 0 };
 
-    const boxW = Math.max(400, inSize.width, outSize.width, PILL_W + BOX_PAD * 2);
+    const boxW = Math.max(350, inSize.width, outSize.width, PILL_W + BOX_PAD * 2);
     const boxH = TITLE_H + inSize.height + outSize.height + BOX_PAD * 2;
 
-    return { width: boxW, height: Math.max(boxH, NODE_H) };
+    return { width: boxW, height: Math.max(boxH, 80) };
   }
 
   // ── Smart edge routing helpers ────────────────────────────────────────────
@@ -210,6 +286,7 @@
   }
 
   function resolveEdgePos(moduleId, classId) {
+    if (moduleId !== inspectedModuleId) return nodePos[moduleId];
     const pkg = classPackage(classId);
     const expanded = expandedPackages.get(moduleId);
     if (expanded && expanded.has(pkg)) {
@@ -230,7 +307,7 @@
     });
     g.setDefaultEdgeLabel(() => ({}));
     modules.forEach(m => {
-      const unfoldSize = unfoldedModules.has(m.id) ? getUnfoldedBoxSize(m.id) : null;
+      const unfoldSize = (m.id === inspectedModuleId) ? getUnfoldedBoxSize(m.id) : null;
       const attrs = {
         width:  unfoldSize ? unfoldSize.width  : NODE_W,
         height: unfoldSize ? unfoldSize.height : NODE_H
@@ -261,7 +338,7 @@
     const LAYER_SEP = 170;
     const BASE_NODE_SEP = 220;
     // Use wider separation when any visible node is unfolded
-    const hasUnfolded = [...visibleIds].some(id => unfoldedModules.has(id));
+    const hasUnfolded = [...visibleIds].some(id => id === inspectedModuleId);
     const NODE_SEP = hasUnfolded ? Math.max(BASE_NODE_SEP, 450) : BASE_NODE_SEP;
 
     // Local acyclic adjacency within visible set
@@ -549,7 +626,7 @@
 
   // ── Straight edge routing ──────────────────────────────────────────────────
   function nodeSizeFor(moduleId) {
-    if (unfoldedModules.has(moduleId)) {
+    if (moduleId === inspectedModuleId) {
       const s = getUnfoldedBoxSize(moduleId);
       return { hw: s.width / 2, hh: s.height / 2 };
     }
@@ -752,51 +829,55 @@
       transitiveIn.forEach(fromId  => drawTransEdge(fromId, focusedId));
     }
 
-    // ── Class-level edges for unfolded modules ──────────────────────────────
-    if (unfoldedModules.size > 0) {
-      unfoldedModules.forEach((classDataEntry, moduleId) => {
-        classDataEntry.classEdges.forEach(ce => {
-          const fromPos = unfoldedModules.has(ce.fromModuleId)
+    // ── Class-level edges for inspected module relationship ─────────────────
+    if (inspectedModuleId && inspectionTargetId) {
+      const relData = getRelationshipData(inspectedModuleId, inspectionTargetId);
+      if (relData) {
+        relData.classEdges.forEach(ce => {
+          const isFromInspected = ce.fromModuleId === inspectedModuleId;
+          const fromPos = isFromInspected
             ? resolveEdgePos(ce.fromModuleId, ce.fromClassId)
             : nodePos[ce.fromModuleId];
-          const toPos = unfoldedModules.has(ce.toModuleId)
-            ? resolveEdgePos(ce.toModuleId, ce.toClassId)
-            : nodePos[ce.toModuleId];
+          const toPos = isFromInspected
+            ? nodePos[ce.toModuleId]
+            : resolveEdgePos(ce.toModuleId, ce.toClassId);
           if (!fromPos || !toPos) return;
           if (!visibleIds.has(ce.fromModuleId) || !visibleIds.has(ce.toModuleId)) return;
 
           const isHighlighted = highlightedClassId === ce.fromClassId || highlightedClassId === ce.toClassId;
-          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP);
+          // Use boundary type color: cyan for incoming to inspected, orange for outgoing from inspected
+          const isOutgoing = ce.fromModuleId === inspectedModuleId;
+          const edgeColor = isOutgoing ? '#f5a623' : '#4fc3f7';
+          const pathD = buildStraightPath(fromPos, toPos, GAP, GAP, ce.fromModuleId, ce.toModuleId);
 
           const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
           path.setAttribute('d', pathD);
           path.setAttribute('fill', 'none');
           if (isHighlighted) {
             path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', '2');
+            path.setAttribute('stroke-width', '2.5');
             path.setAttribute('opacity', '1');
           } else if (highlightedClassId) {
-            path.setAttribute('stroke', 'rgba(255,255,255,0.15)');
+            path.setAttribute('stroke', edgeColor);
             path.setAttribute('stroke-width', '0.8');
             path.setAttribute('opacity', '0.08');
           } else {
-            path.setAttribute('stroke', '#c084fc');
-            path.setAttribute('stroke-width', '1');
-            path.setAttribute('stroke-dasharray', '3,2');
-            path.setAttribute('opacity', '0.5');
+            path.setAttribute('stroke', edgeColor);
+            path.setAttribute('stroke-width', '1.5');
+            path.setAttribute('opacity', '0.8');
           }
-          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : 'url(#arrow-trans)');
+          path.setAttribute('marker-end', isHighlighted ? 'url(#arrow-lit)' : (isOutgoing ? 'url(#arrow-lit)' : 'url(#arrow-rel)'));
           path.style.cursor = 'pointer';
           path.addEventListener('click', () => {
             const detail = document.getElementById('edge-detail');
-            detail.innerHTML = `<strong style="color:#c084fc">Class edge</strong><br/>` +
+            detail.innerHTML = `<strong style="color:${edgeColor}">Class dependency</strong><br/>` +
               `<span style="color:#aaa">${ce.fromClassId}</span><br/>` +
-              `<span style="color:#555">↓</span><br/>` +
+              `<span style="color:#555">→</span><br/>` +
               `<span style="color:#aaa">${ce.toClassId}</span>`;
           });
           edgeGroup.appendChild(path);
         });
-      });
+      }
     }
   }
 
@@ -808,7 +889,7 @@
     nodeGroup.innerHTML = '';
 
     modules.forEach(m => {
-      if (unfoldedModules.has(m.id)) {
+      if (m.id === inspectedModuleId) {
         drawUnfoldedModule(m, visibleIds);
         return;
       }
@@ -910,11 +991,11 @@
       d3.select(g).on('contextmenu', function (event) {
         event.preventDefault();
         const items = [];
-        if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && !unfoldedModules.has(m.id)) {
-          items.push({ label: 'Inspect classes', action: () => unfoldModule(m.id) });
+        if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && m.id !== inspectedModuleId) {
+          items.push({ label: 'Inspect classes', action: () => enterInspection(m.id) });
         }
-        if (unfoldedModules.has(m.id)) {
-          items.push({ label: 'Collapse', action: () => collapseModule(m.id) });
+        if (m.id === inspectedModuleId) {
+          items.push({ label: 'Exit inspection', action: () => exitInspection() });
         }
         if (items.length > 0) showContextMenu(event.clientX, event.clientY, items);
       });
@@ -926,21 +1007,11 @@
     const pos = nodePos[m.id];
     if (!pos) return;
     const isDim = focusedId && !visibleIds.has(m.id);
-    const classDataEntry = unfoldedModules.get(m.id);
-    if (!classDataEntry) return;
-
-    const expanded = expandedPackages.get(m.id) || new Set();
-    const packages = classDataEntry.packages;
-    if (packages.length === 0) { collapseModule(m.id); return; }
 
     const nodeGroup = document.getElementById('nodes');
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     g.setAttribute('transform', `translate(${pos.x},${pos.y})`);
     nodeElements[m.id] = g;
-
-    // Classify packages into incoming (top) and outgoing (bottom) zones
-    const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
-    const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
 
     const boxSize = getUnfoldedBoxSize(m.id);
     const boxW = boxSize.width;
@@ -968,134 +1039,156 @@
     title.addEventListener('contextmenu', (event) => {
       event.preventDefault(); event.stopPropagation();
       showContextMenu(event.clientX, event.clientY, [
-        { label: 'Collapse', action: () => collapseModule(m.id) },
+        { label: 'Exit inspection', action: () => exitInspection() },
       ]);
     });
     g.appendChild(title);
 
-    // Draw a zone of packages (either incoming or outgoing)
-    function drawZone(pkgs, zoneLabel, zoneTop) {
-      // Zone label
-      const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      label.setAttribute('x', -boxW / 2 + BOX_PAD); label.setAttribute('y', zoneTop + 12);
-      label.setAttribute('font-size', '8'); label.setAttribute('font-family', 'monospace');
-      label.setAttribute('fill', '#555'); label.setAttribute('pointer-events', 'none');
-      label.textContent = zoneLabel;
-      g.appendChild(label);
+    const relData = inspectionTargetId ? getRelationshipData(inspectedModuleId, inspectionTargetId) : null;
 
-      let xCursor = -boxW / 2 + BOX_PAD;
-      const yBase = zoneTop + 20;
+    if (!relData || relData.packages.length === 0) {
+      // Empty state — show hint message
+      const msg = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      msg.setAttribute('x', 0); msg.setAttribute('y', 8);
+      msg.setAttribute('text-anchor', 'middle'); msg.setAttribute('font-size', '9');
+      msg.setAttribute('font-family', 'monospace'); msg.setAttribute('fill', '#555');
+      msg.textContent = inspectionTargetId ? 'No class dependencies with this module' : 'Click a module to see class dependencies';
+      g.appendChild(msg);
+    } else {
+      // Show filtered packages for the relationship
+      const expanded = expandedPackages.get(m.id) || new Set();
+      const packages = relData.packages;
+      const incomingPkgs = packages.filter(p => p.boundaryType === 'INCOMING' || p.boundaryType === 'BOTH');
+      const outgoingPkgs = packages.filter(p => p.boundaryType === 'OUTGOING' || p.boundaryType === 'BOTH');
 
-      pkgs.forEach(pkg => {
-        const color = PILL_COLORS[pkg.boundaryType] || '#888';
+      // Subtitle showing which relationship
+      const subtitle = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      subtitle.setAttribute('x', 0); subtitle.setAttribute('y', -boxH / 2 + 30);
+      subtitle.setAttribute('text-anchor', 'middle'); subtitle.setAttribute('font-size', '8');
+      subtitle.setAttribute('font-family', 'monospace'); subtitle.setAttribute('fill', '#555');
+      subtitle.textContent = '\u2194 ' + inspectionTargetId;
+      g.appendChild(subtitle);
 
-        if (expanded.has(pkg.name)) {
-          // Package header
-          const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          header.setAttribute('x', xCursor); header.setAttribute('y', yBase + 12);
-          header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
-          header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
-          header.textContent = `▾ ${pkg.name.split('.').slice(-2).join('.')}`;
-          header.addEventListener('click', () => togglePackage(m.id, pkg.name));
-          g.appendChild(header);
+      function drawZone(pkgs, zoneLabel, zoneTop) {
+        const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        label.setAttribute('x', -boxW / 2 + BOX_PAD); label.setAttribute('y', zoneTop + 12);
+        label.setAttribute('font-size', '8'); label.setAttribute('font-family', 'monospace');
+        label.setAttribute('fill', '#555'); label.setAttribute('pointer-events', 'none');
+        label.textContent = zoneLabel;
+        g.appendChild(label);
 
-          // Classes in a grid (max 3 columns)
-          const cols = Math.min(pkg.classes.length, 3);
-          pkg.classes.forEach((cls, ci) => {
-            const col = ci % cols;
-            const row = Math.floor(ci / cols);
-            const cx = xCursor + col * (CLASS_W + 8) + CLASS_W / 2;
-            const cy = yBase + 20 + row * (CLASS_H + 4);
+        let xCursor = -boxW / 2 + BOX_PAD;
+        const yBase = zoneTop + 20;
 
-            const isHighlighted = highlightedClassId === cls.id;
-            const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            clsRect.setAttribute('x', cx - CLASS_W / 2); clsRect.setAttribute('y', cy);
-            clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
-            clsRect.setAttribute('rx', '3');
-            clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
-            clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
-            clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
-            clsRect.style.cursor = 'pointer';
-            clsRect.addEventListener('click', () => highlightClass(cls.id));
-            g.appendChild(clsRect);
+        pkgs.forEach(pkg => {
+          const color = PILL_COLORS[pkg.boundaryType] || '#888';
 
-            const clsText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            clsText.setAttribute('x', cx); clsText.setAttribute('y', cy + 14);
-            clsText.setAttribute('text-anchor', 'middle'); clsText.setAttribute('font-size', '9');
-            clsText.setAttribute('font-family', 'monospace');
-            clsText.setAttribute('fill', isHighlighted ? '#fff' : '#aaa');
-            clsText.setAttribute('pointer-events', 'none');
-            clsText.textContent = cls.simpleName;
-            g.appendChild(clsText);
+          if (expanded.has(pkg.name)) {
+            const header = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            header.setAttribute('x', xCursor); header.setAttribute('y', yBase + 12);
+            header.setAttribute('font-size', '9'); header.setAttribute('font-family', 'monospace');
+            header.setAttribute('fill', color); header.setAttribute('cursor', 'pointer');
+            header.textContent = '\u25BE ' + pkg.name.split('.').slice(-2).join('.');
+            header.addEventListener('click', () => togglePackage(pkg.name));
+            g.appendChild(header);
 
-            // Store absolute position for edge routing
-            nodePos['class:' + cls.id] = { x: pos.x + cx, y: pos.y + cy + CLASS_H / 2 };
-          });
+            const cols = Math.min(pkg.classes.length, 3);
+            pkg.classes.forEach((cls, ci) => {
+              const col = ci % cols;
+              const row = Math.floor(ci / cols);
+              const cx = xCursor + col * (CLASS_W + 8) + CLASS_W / 2;
+              const cy = yBase + 20 + row * (CLASS_H + 4);
 
-          xCursor += Math.min(pkg.classes.length, 3) * (CLASS_W + 8) + 16;
-        } else {
-          // Collapsed pill
-          const pillX = xCursor;
-          const pillY = yBase;
-          const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-          pill.setAttribute('x', pillX); pill.setAttribute('y', pillY);
-          pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
-          pill.setAttribute('rx', PILL_H / 2); pill.setAttribute('fill', '#1a1a2e');
-          pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '1');
-          pill.style.cursor = 'pointer';
-          pill.addEventListener('click', () => togglePackage(m.id, pkg.name));
-          g.appendChild(pill);
+              const isHighlighted = highlightedClassId === cls.id;
+              const clsRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+              clsRect.setAttribute('x', cx - CLASS_W / 2); clsRect.setAttribute('y', cy);
+              clsRect.setAttribute('width', CLASS_W); clsRect.setAttribute('height', CLASS_H);
+              clsRect.setAttribute('rx', '3');
+              clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
+              clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
+              clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
+              clsRect.style.cursor = 'pointer';
+              clsRect.addEventListener('click', (event) => {
+                event.stopPropagation();
+                highlightClass(cls.id);
+              });
+              g.appendChild(clsRect);
 
-          const pillText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-          pillText.setAttribute('x', pillX + PILL_W / 2); pillText.setAttribute('y', pillY + 15);
-          pillText.setAttribute('text-anchor', 'middle'); pillText.setAttribute('font-size', '9');
-          pillText.setAttribute('font-family', 'monospace'); pillText.setAttribute('fill', color);
-          pillText.setAttribute('pointer-events', 'none');
-          const shortPkg = pkg.name.split('.').slice(-2).join('.');
-          pillText.textContent = `${shortPkg} (${pkg.classes.length})`;
-          g.appendChild(pillText);
+              const clsText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+              clsText.setAttribute('x', cx); clsText.setAttribute('y', cy + 14);
+              clsText.setAttribute('text-anchor', 'middle'); clsText.setAttribute('font-size', '9');
+              clsText.setAttribute('font-family', 'monospace');
+              clsText.setAttribute('fill', isHighlighted ? '#fff' : '#aaa');
+              clsText.setAttribute('pointer-events', 'none');
+              clsText.textContent = cls.simpleName;
+              g.appendChild(clsText);
 
-          // Store absolute position for edge routing
-          nodePos['pkg:' + m.id + ':' + pkg.name] = { x: pos.x + pillX + PILL_W / 2, y: pos.y + pillY + PILL_H / 2 };
+              nodePos['class:' + cls.id] = { x: pos.x + cx, y: pos.y + cy + CLASS_H / 2 };
+            });
 
-          xCursor += PILL_W + 8;
-        }
-      });
-    }
+            xCursor += Math.min(pkg.classes.length, 3) * (CLASS_W + 8) + 16;
+          } else {
+            const pillX = xCursor;
+            const pillY = yBase;
+            const pill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            pill.setAttribute('x', pillX); pill.setAttribute('y', pillY);
+            pill.setAttribute('width', PILL_W); pill.setAttribute('height', PILL_H);
+            pill.setAttribute('rx', PILL_H / 2); pill.setAttribute('fill', '#1a1a2e');
+            pill.setAttribute('stroke', color); pill.setAttribute('stroke-width', '1');
+            pill.style.cursor = 'pointer';
+            pill.addEventListener('click', (event) => {
+              event.stopPropagation();
+              togglePackage(pkg.name);
+            });
+            g.appendChild(pill);
 
-    // Layout: incoming zone in top half, outgoing zone in bottom half
-    const titleH = 30;
-    const halfH = (boxH - titleH) / 2;
-    const topZoneY = -boxH / 2 + titleH;
-    const bottomZoneY = -boxH / 2 + titleH + halfH;
+            const pillText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            pillText.setAttribute('x', pillX + PILL_W / 2); pillText.setAttribute('y', pillY + 15);
+            pillText.setAttribute('text-anchor', 'middle'); pillText.setAttribute('font-size', '9');
+            pillText.setAttribute('font-family', 'monospace'); pillText.setAttribute('fill', color);
+            pillText.setAttribute('pointer-events', 'none');
+            const shortPkg = pkg.name.split('.').slice(-2).join('.');
+            pillText.textContent = shortPkg + ' (' + pkg.classes.length + ')';
+            g.appendChild(pillText);
 
-    if (incomingPkgs.length > 0) {
-      drawZone(incomingPkgs, '▼ INCOMING', topZoneY);
-    }
-    if (outgoingPkgs.length > 0) {
-      drawZone(outgoingPkgs, '▲ OUTGOING', bottomZoneY);
-    }
+            nodePos['pkg:' + m.id + ':' + pkg.name] = { x: pos.x + pillX + PILL_W / 2, y: pos.y + pillY + PILL_H / 2 };
 
-    // Divider line between zones
-    if (incomingPkgs.length > 0 && outgoingPkgs.length > 0) {
-      const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-      divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', bottomZoneY);
-      divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', bottomZoneY);
-      divider.setAttribute('stroke', '#444'); divider.setAttribute('stroke-width', '0.5');
-      divider.setAttribute('stroke-dasharray', '3,3');
-      g.appendChild(divider);
+            xCursor += PILL_W + 8;
+          }
+        });
+      }
+
+      const TITLE_H = 38;  // title + subtitle
+      const halfH = (boxH - TITLE_H) / 2;
+      const topZoneY = -boxH / 2 + TITLE_H;
+      const bottomZoneY = -boxH / 2 + TITLE_H + halfH;
+
+      if (incomingPkgs.length > 0) {
+        drawZone(incomingPkgs, '\u25BC USED BY ' + inspectionTargetId, topZoneY);
+      }
+      if (outgoingPkgs.length > 0) {
+        drawZone(outgoingPkgs, '\u25B2 USES ' + inspectionTargetId, bottomZoneY);
+      }
+
+      if (incomingPkgs.length > 0 && outgoingPkgs.length > 0) {
+        const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        divider.setAttribute('x1', -boxW / 2 + 8); divider.setAttribute('y1', bottomZoneY);
+        divider.setAttribute('x2', boxW / 2 - 8); divider.setAttribute('y2', bottomZoneY);
+        divider.setAttribute('stroke', '#444'); divider.setAttribute('stroke-width', '0.5');
+        divider.setAttribute('stroke-dasharray', '3,3');
+        g.appendChild(divider);
+      }
     }
 
     nodeGroup.appendChild(g);
 
-    // Make the bounding box draggable
+    // Make draggable
     const drag = d3.drag()
       .on('start', function (event) { d3.select(this).raise(); })
       .on('drag', function (event) {
         nodePos[m.id].x += event.dx;
         nodePos[m.id].y += event.dy;
         d3.select(g).attr('transform', `translate(${nodePos[m.id].x},${nodePos[m.id].y})`);
-        // Update sub-positions for pills/classes
         drawEdges(getEffectiveVisibleIds());
       });
     d3.select(g).call(drag);
@@ -1115,6 +1208,12 @@
 
   // ── Events ─────────────────────────────────────────────────────────────────
   function onNodeClick(id) {
+    // If in inspection mode, clicking another module shows its relationship
+    if (inspectedModuleId && id !== inspectedModuleId) {
+      setInspectionTarget(id);
+      return;
+    }
+
     const wasFocused = focusedId === id;
     focusedId = wasFocused ? null : id;
     updateExplorer();
@@ -1380,6 +1479,10 @@
     document.getElementById('btn-reset').addEventListener('click', () => {
       focusedId   = null;
       selectedIds = new Set();
+      inspectedModuleId = null;
+      inspectionTargetId = null;
+      expandedPackages.clear();
+      highlightedClassId = null;
       updateExplorer();
       rerender();
     });
