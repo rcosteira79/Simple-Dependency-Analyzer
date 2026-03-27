@@ -31,13 +31,10 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> = mapOf(":app" to setOf(":core-ui"))
-
         // When:
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputAppResult, inputCoreResult),
-                moduleEdges = inputModuleEdges,
             )
 
         // Then: AppMain is an outgoing boundary in :app
@@ -71,12 +68,9 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> = mapOf(":app" to setOf(":core-ui"))
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputAppResult, inputCoreResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualCoreData: ModuleClassData = actualResult[":core-ui"]!!
@@ -121,16 +115,9 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> =
-            mapOf(
-                ":top" to setOf(":middle"),
-                ":middle" to setOf(":bottom"),
-            )
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputTopResult, inputMiddleResult, inputBottomResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualMiddleData: ModuleClassData = actualResult[":middle"]!!
@@ -161,12 +148,9 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> = mapOf(":app" to setOf(":core-ui"))
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputAppResult, inputCoreResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualAppEdges = actualResult[":app"]!!.classEdges
@@ -202,12 +186,9 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> = mapOf(":app" to setOf(":core-ui"))
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputAppResult, inputCoreResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualAppData: ModuleClassData = actualResult[":app"]!!
@@ -231,55 +212,13 @@ class ClassAnalysisOrchestratorTest {
                     ),
                 classReferences = emptyMap(),
             )
-        val inputModuleEdges: Map<String, Set<String>> = emptyMap()
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputIsolatedResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualIsolatedData: ModuleClassData = actualResult[":isolated"]!!
         assertTrue(actualIsolatedData.packages.isEmpty())
-    }
-
-    @Test
-    fun `ignores class references to modules without declared dependency`() {
-        // Given: :app references a class in :secret but has no declared dependency on :secret
-        val inputAppResult =
-            BytecodeAnalysisResult(
-                moduleId = ":app",
-                discoveredClasses =
-                    listOf(
-                        DiscoveredClass("com.example.app.AppMain", "AppMain", "com.example.app"),
-                    ),
-                classReferences =
-                    mapOf(
-                        "com.example.app.AppMain" to setOf("com.example.secret.Hidden"),
-                    ),
-            )
-        val inputSecretResult =
-            BytecodeAnalysisResult(
-                moduleId = ":secret",
-                discoveredClasses =
-                    listOf(
-                        DiscoveredClass("com.example.secret.Hidden", "Hidden", "com.example.secret"),
-                    ),
-                classReferences = emptyMap(),
-            )
-        // No dependency from :app to :secret
-        val inputModuleEdges: Map<String, Set<String>> = emptyMap()
-
-        // When:
-        val actualResult: Map<String, ModuleClassData> =
-            ClassAnalysisOrchestrator.buildClassData(
-                analysisResults = listOf(inputAppResult, inputSecretResult),
-                moduleEdges = inputModuleEdges,
-            )
-
-        // Then: no boundary classes and no edges
-        assertTrue(actualResult[":app"]!!.packages.isEmpty())
-        assertTrue(actualResult[":app"]!!.classEdges.isEmpty())
     }
 
     @Test
@@ -296,12 +235,9 @@ class ClassAnalysisOrchestratorTest {
                         "com.example.app.AppMain" to setOf("com.thirdparty.SomeLib"),
                     ),
             )
-        val inputModuleEdges: Map<String, Set<String>> = emptyMap()
-
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
                 analysisResults = listOf(inputAppResult),
-                moduleEdges = inputModuleEdges,
             )
 
         val actualAppData: ModuleClassData = actualResult[":app"]!!

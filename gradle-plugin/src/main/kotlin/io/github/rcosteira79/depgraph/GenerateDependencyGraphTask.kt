@@ -70,24 +70,7 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
                 analyser.analyse(classDirs)
             }
 
-        val moduleEdges: Map<String, Set<String>> =
-            candidates.associate { subproject ->
-                subproject.path to
-                    subproject.configurations
-                        .filter { it.name in setOf("implementation", "api", "compileOnly") }
-                        .flatMap { config ->
-                            config.dependencies
-                                .filterIsInstance<org.gradle.api.artifacts.ProjectDependency>()
-                                .map {
-                                    // dependencyProject is deprecated since Gradle 8.x; the replacement API
-                                    // requires Gradle 8.1+ which we don't mandate yet.
-                                    @Suppress("DEPRECATION")
-                                    it.dependencyProject.path
-                                }
-                        }.toSet()
-            }
-
-        return ClassAnalysisOrchestrator.buildClassData(analysisResults, moduleEdges)
+        return ClassAnalysisOrchestrator.buildClassData(analysisResults)
     }
 
     private fun resolveClassDirectories(

@@ -7,10 +7,7 @@ import io.github.rcosteira79.depgraph.model.ModuleClassData
 import io.github.rcosteira79.depgraph.model.PackageNode
 
 object ClassAnalysisOrchestrator {
-    fun buildClassData(
-        analysisResults: List<BytecodeAnalysisResult>,
-        moduleEdges: Map<String, Set<String>>,
-    ): Map<String, ModuleClassData> {
+    fun buildClassData(analysisResults: List<BytecodeAnalysisResult>): Map<String, ModuleClassData> {
         val classToModule: Map<String, String> =
             analysisResults
                 .flatMap { result ->
@@ -31,7 +28,6 @@ object ClassAnalysisOrchestrator {
                         targetClasses.mapNotNull { targetClass ->
                             val targetModule: String = classToModule[targetClass] ?: return@mapNotNull null
                             if (targetModule == sourceModule) return@mapNotNull null
-                            if (moduleEdges[sourceModule]?.contains(targetModule) != true) return@mapNotNull null
                             ClassLevelEdge(
                                 fromClassId = sourceClass,
                                 fromModuleId = sourceModule,

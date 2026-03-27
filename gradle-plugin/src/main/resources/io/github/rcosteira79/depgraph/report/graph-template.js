@@ -1123,9 +1123,9 @@
                 );
                 const lines = usages.map(ce => {
                   if (ce.fromClassId === cls.id) {
-                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:#aaa">${ce.toClassId.split('.').pop()}</span>`;
+                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:#aaa">${ce.toClassId}</span>`;
                   } else {
-                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:#aaa">${ce.fromClassId.split('.').pop()}</span>`;
+                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:#aaa">${ce.fromClassId}</span>`;
                   }
                 });
                 detail.innerHTML =
@@ -1433,13 +1433,13 @@
 
     const btnTrans = document.createElement('button');
     btnTrans.className = 'tb-btn'; btnTrans.id = 'btn-transitive';
-    btnTrans.textContent = 'Transitive: Off';
+    btnTrans.textContent = 'Transitive Dependencies: Off';
     btnTrans.title = 'Show transitive dependency edges for the focused node';
     const depthCtrl = document.getElementById('depth-control');
     depthCtrl.parentNode.insertBefore(btnTrans, depthCtrl);
     btnTrans.addEventListener('click', () => {
       showTransitive = !showTransitive;
-      btnTrans.textContent = `Transitive: ${showTransitive ? 'On' : 'Off'}`;
+      btnTrans.textContent = `Transitive Dependencies: ${showTransitive ? 'On' : 'Off'}`;
       btnTrans.style.color = showTransitive ? '#c084fc' : '';
       rerender();
     });
@@ -1465,12 +1465,12 @@
     // ── Edge mode toggle ──────────────────────────────────────────────────────
     const btnEdge = document.createElement('button');
     btnEdge.className = 'tb-btn'; btnEdge.id = 'btn-edge-mode';
-    btnEdge.textContent = 'Arrow Style: Bent';
+    btnEdge.textContent = 'Arrow Style: Straight';
     btnEdge.title = 'Toggle straight / orthogonal edge routing';
     depthCtrl.parentNode.insertBefore(btnEdge, depthCtrl);
     btnEdge.addEventListener('click', () => {
       edgeMode = edgeMode === 'straight' ? 'orthogonal' : 'straight';
-      btnEdge.textContent = edgeMode === 'straight' ? 'Arrow Style: Bent' : 'Arrow Style: Straight';
+      btnEdge.textContent = edgeMode === 'straight' ? 'Arrow Style: Straight' : 'Arrow Style: Bent';
       rerender();
     });
 
