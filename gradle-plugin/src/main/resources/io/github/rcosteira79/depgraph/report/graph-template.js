@@ -548,19 +548,28 @@
   }
 
   // ── Straight edge routing ──────────────────────────────────────────────────
-  function nodeEdgePoint(cx, cy, tx, ty, gap) {
+  function nodeSizeFor(moduleId) {
+    if (unfoldedModules.has(moduleId)) {
+      const s = getUnfoldedBoxSize(moduleId);
+      return { hw: s.width / 2, hh: s.height / 2 };
+    }
+    return { hw: NODE_W / 2, hh: NODE_H / 2 };
+  }
+
+  function nodeEdgePoint(cx, cy, tx, ty, gap, moduleId) {
     const dx = tx - cx, dy = ty - cy;
     const len = Math.hypot(dx, dy);
     if (len < 0.5) return { x: cx, y: cy };
+    const { hw, hh } = moduleId ? nodeSizeFor(moduleId) : { hw: NODE_W / 2, hh: NODE_H / 2 };
     const ux = dx / len, uy = dy / len;
-    const tX = (NODE_W / 2 + gap) / Math.abs(ux || 1e-9);
-    const tY = (NODE_H / 2 + gap) / Math.abs(uy || 1e-9);
+    const tX = (hw + gap) / Math.abs(ux || 1e-9);
+    const tY = (hh + gap) / Math.abs(uy || 1e-9);
     return { x: cx + ux * Math.min(tX, tY), y: cy + uy * Math.min(tX, tY) };
   }
 
-  function buildStraightPath(sp, tp, srcGap, tgtGap) {
-    const src = nodeEdgePoint(sp.x, sp.y, tp.x, tp.y, srcGap);
-    const tgt = nodeEdgePoint(tp.x, tp.y, sp.x, sp.y, tgtGap);
+  function buildStraightPath(sp, tp, srcGap, tgtGap, srcModuleId, tgtModuleId) {
+    const src = nodeEdgePoint(sp.x, sp.y, tp.x, tp.y, srcGap, srcModuleId);
+    const tgt = nodeEdgePoint(tp.x, tp.y, sp.x, sp.y, tgtGap, tgtModuleId);
     return `M ${src.x} ${src.y} L ${tgt.x} ${tgt.y}`;
   }
 
@@ -678,7 +687,7 @@
 
       const pathD = edgeMode === 'orthogonal'
         ? buildEdgePath(sp, tp, portOffsets[i].src, portOffsets[i].tgt, srcGap, tgtGap)
-        : buildStraightPath(sp, tp, srcGap, tgtGap);
+        : buildStraightPath(sp, tp, srcGap, tgtGap, e.from, e.to);
 
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       path.setAttribute('d', pathD);
@@ -725,7 +734,7 @@
         if (!sp || !tp) return;
         const pathD = edgeMode === 'orthogonal'
           ? buildEdgePath(sp, tp, 0, 0, GAP, GAP)
-          : buildStraightPath(sp, tp, GAP, GAP);
+          : buildStraightPath(sp, tp, GAP, GAP, fromId, toId);
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('d', pathD);
         path.setAttribute('fill', 'none');
@@ -1229,22 +1238,13 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
-    // ctrl+wheel (pinch gesture or ctrl+scroll) = zoom; middle mouse drag = pan
-    // Plain wheel (two-finger trackpad swipe or scroll wheel) = pan — see handler below
+    // Mouse wheel = zoom (centred on cursor). Middle mouse drag = pan.
     const zoom = d3.zoom()
-      .filter(event => (event.type === 'wheel' && event.ctrlKey) || event.button === 1)
+      .filter(event => event.type === 'wheel' || event.button === 1)
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
-
-    // Two-finger trackpad swipe (and plain scroll wheel) → pan
-    svg.node().addEventListener('wheel', event => {
-      if (event.ctrlKey) return; // pinch zoom handled by D3 above
-      event.preventDefault();
-      const tf = d3.zoomTransform(svg.node());
-      zoom.transform(svg, tf.translate(-event.deltaX / tf.k, -event.deltaY / tf.k));
-    }, { passive: false });
 
     // Prevent middle-click autoscroll cursor
     svg.node().addEventListener('mousedown', event => {
