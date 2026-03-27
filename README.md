@@ -110,6 +110,21 @@ This compiles all modules and scans the bytecode. The report is generated at `bu
 
 Skips compilation and class analysis. The report shows only the module-level graph without class inspection capabilities.
 
+### Known limitation: Gradle configuration cache
+
+The plugin accesses `project` at execution time, which is incompatible with Gradle's configuration cache. If you're using Gradle 9+ (which enables configuration cache by default), either:
+
+- Run with `--no-configuration-cache`:
+  ```bash
+  ./gradlew generateDependencyGraph --no-configuration-cache
+  ```
+- Or if you see stale/incorrect results, clear the cache first:
+  ```bash
+  rm -rf .gradle/configuration-cache
+  ```
+
+Configuration cache support is planned for a future release.
+
 ## Configuration
 
 In your root `build.gradle.kts`:
