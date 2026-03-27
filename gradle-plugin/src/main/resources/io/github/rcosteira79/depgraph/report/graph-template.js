@@ -14,6 +14,7 @@
   let focusedId   = null;
   let depthValue  = 1;
   let edgeMode    = 'straight'; // 'straight' | 'orthogonal'
+  let showTransitive      = false;
   let selectedIds = new Set();
   let isAnimating = false;
 
@@ -310,7 +311,7 @@
 
     const t0 = performance.now();
     isAnimating  = true;
-    const visIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+    const visIds = getEffectiveVisibleIds();
 
     function tick(now) {
       const raw = Math.min((now - t0) / duration, 1);
@@ -354,6 +355,73 @@
       frontier = next;
     }
     return visible;
+  }
+
+  // When transitive toggle is on and a node is focused, include every node
+  // reachable from / able to reach the focused node (unlimited depth).
+  function getEffectiveVisibleIds() {
+    if (!focusedId) return new Set(data.modules.map(m => m.id));
+    if (!showTransitive) return getEffectiveVisibleIds();
+
+    const all = new Set([focusedId]);
+    // Forward BFS
+    const q1 = [focusedId]; let q1i = 0;
+    while (q1i < q1.length) {
+      const curr = q1[q1i++];
+      data.edges.forEach(e => {
+        if (e.from === curr && !all.has(e.to))   { all.add(e.to);   q1.push(e.to); }
+      });
+    }
+    // Backward BFS
+    const q2 = [focusedId]; let q2i = 0;
+    while (q2i < q2.length) {
+      const curr = q2[q2i++];
+      data.edges.forEach(e => {
+        if (e.to === curr && !all.has(e.from)) { all.add(e.from); q2.push(e.from); }
+      });
+    }
+    return all;
+  }
+
+  // Returns { transitiveOut, transitiveIn } where:
+  // transitiveOut = nodes reachable from focusId (not direct neighbours)
+  // transitiveIn  = nodes that can reach focusId (not direct neighbours)
+  function computeTransitiveEdgesForFocus(focusId, visibleIds) {
+    const directOut = new Set(
+      data.edges.filter(e => e.from === focusId && visibleIds.has(e.to)).map(e => e.to)
+    );
+    const directIn = new Set(
+      data.edges.filter(e => e.to === focusId && visibleIds.has(e.from)).map(e => e.from)
+    );
+
+    const reachableOut = new Set();
+    const q1 = [focusId]; let q1i = 0;
+    while (q1i < q1.length) {
+      const curr = q1[q1i++];
+      data.edges.forEach(e => {
+        if (e.from === curr && visibleIds.has(e.to) && !reachableOut.has(e.to)) {
+          reachableOut.add(e.to);
+          q1.push(e.to);
+        }
+      });
+    }
+
+    const reachableIn = new Set();
+    const q2 = [focusId]; let q2i = 0;
+    while (q2i < q2.length) {
+      const curr = q2[q2i++];
+      data.edges.forEach(e => {
+        if (e.to === curr && visibleIds.has(e.from) && !reachableIn.has(e.from)) {
+          reachableIn.add(e.from);
+          q2.push(e.from);
+        }
+      });
+    }
+
+    return {
+      transitiveOut: [...reachableOut].filter(id => !directOut.has(id)),
+      transitiveIn:  [...reachableIn].filter(id => !directIn.has(id)),
+    };
   }
 
   // ── Straight edge routing ──────────────────────────────────────────────────
@@ -465,6 +533,13 @@
     const edgeGroup   = document.getElementById('edges');
     edgeGroup.innerHTML = '';
 
+    // Pre-compute transitive sets
+    let transitiveOut = [], transitiveIn = [], transitiveNodeIds = null;
+    if (showTransitive && focusedId) {
+      ({ transitiveOut, transitiveIn } = computeTransitiveEdgesForFocus(focusedId, visibleIds));
+      transitiveNodeIds = new Set([...transitiveOut, ...transitiveIn]);
+    }
+
     edges.forEach((e, i) => {
       const sp = nodePos[e.from], tp = nodePos[e.to];
       if (!sp || !tp) return;
@@ -472,6 +547,9 @@
       const isCycle       = cycleEdgeKeys.has(`${e.from}|${e.to}`);
       const isFocusEdge   = focusedId && (e.from === focusedId || e.to === focusedId);
       const isInSubgraph  = !focusedId || (visibleIds.has(e.from) && visibleIds.has(e.to));
+      const isSecondaryTrans = transitiveNodeIds !== null && isInSubgraph &&
+        !isFocusEdge && !isCycle &&
+        (transitiveNodeIds.has(e.from) || transitiveNodeIds.has(e.to));
       const srcGap = e.from === focusedId ? FOCUS_GAP : GAP;
       const tgtGap = e.to   === focusedId ? FOCUS_GAP : GAP;
 
@@ -496,6 +574,12 @@
         path.setAttribute('stroke-width', '2');
         path.setAttribute('opacity', '1');
         path.setAttribute('marker-end', 'url(#arrow-lit)');
+      } else if (isSecondaryTrans) {
+        path.setAttribute('stroke', '#c084fc');
+        path.setAttribute('stroke-width', '1');
+        path.setAttribute('stroke-dasharray', '3,3');
+        path.setAttribute('opacity', '0.35');
+        path.setAttribute('marker-end', 'url(#arrow-trans)');
       } else {
         // All other edges: dim when there is a focus
         const opacity = !isInSubgraph ? '0.05' : focusedId ? '0.15' : '1';
@@ -510,6 +594,31 @@
       path.addEventListener('click', () => onEdgeClick(e.from, e.to, isCycle));
       edgeGroup.appendChild(path);
     });
+
+    // Main transitive arrows (focus ↔ transitive nodes)
+    if (showTransitive && focusedId) {
+      const drawTransEdge = (fromId, toId) => {
+        const sp = nodePos[fromId], tp = nodePos[toId];
+        if (!sp || !tp) return;
+        const pathD = edgeMode === 'orthogonal'
+          ? buildEdgePath(sp, tp, 0, 0, GAP, GAP)
+          : buildStraightPath(sp, tp, GAP, GAP);
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', pathD);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#c084fc');
+        path.setAttribute('stroke-width', '1.5');
+        path.setAttribute('stroke-dasharray', '4,3');
+        path.setAttribute('opacity', '0.7');
+        path.setAttribute('marker-end', 'url(#arrow-trans)');
+        path.style.cursor = 'pointer';
+        path.addEventListener('click', () => onTransitiveEdgeClick(fromId, toId));
+        edgeGroup.appendChild(path);
+      };
+
+      transitiveOut.forEach(toId   => drawTransEdge(focusedId, toId));
+      transitiveIn.forEach(fromId  => drawTransEdge(fromId, focusedId));
+    }
 
     // ── Class-level edges for unfolded modules ──────────────────────────────
     if (unfoldedModules.size > 0) {
@@ -647,7 +756,7 @@
               d3.select(nodeElements[id]).attr('transform', `translate(${nodePos[id].x},${nodePos[id].y})`);
             }
           });
-          drawEdges(getVisibleIds(focusedId, depthValue, data.modules, data.edges));
+          drawEdges(getEffectiveVisibleIds());
         })
         .on('end', function () {
           prevDragPos = null;
@@ -801,7 +910,7 @@
         nodePos[m.id].x += event.dx;
         nodePos[m.id].y += event.dy;
         d3.select(g).attr('transform', `translate(${nodePos[m.id].x},${nodePos[m.id].y})`);
-        drawEdges(getVisibleIds(focusedId, depthValue, data.modules, data.edges));
+        drawEdges(getEffectiveVisibleIds());
       });
     d3.select(g).call(drag);
   }
@@ -813,7 +922,7 @@
   }
 
   function rerender() {
-    const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+    const visibleIds = getEffectiveVisibleIds();
     drawEdges(visibleIds);
     drawNodes(visibleIds);
   }
@@ -827,7 +936,7 @@
     if (focusedId) {
       // Re-run dagre on the visible subgraph to minimise edge crossings,
       // then animate nodes to their new positions.
-      const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+      const visibleIds = getEffectiveVisibleIds();
       const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
       // Draw at current positions first so nodeElements is populated
       drawEdges(visibleIds);
@@ -844,6 +953,47 @@
       ? '<br/><span style="color:#e53935;font-weight:bold">⚠ Circular dependency</span>'
       : '';
     detail.innerHTML = `<strong>${from} → ${to}</strong>${cycleNote}`;
+  }
+
+  // BFS shortest-path finder (follows edge direction only)
+  function findShortestPath(fromId, toId) {
+    const prev = { [fromId]: null };
+    const queue = [fromId]; let qi = 0;
+    while (qi < queue.length) {
+      const curr = queue[qi++];
+      if (curr === toId) break;
+      data.edges.forEach(e => {
+        if (e.from === curr && prev[e.to] === undefined) {
+          prev[e.to] = curr;
+          queue.push(e.to);
+        }
+      });
+    }
+    if (prev[toId] === undefined) return null;
+    const path = [];
+    let curr = toId;
+    while (curr !== null) { path.unshift(curr); curr = prev[curr]; }
+    return path;
+  }
+
+  function onTransitiveEdgeClick(fromId, toId) {
+    const path = findShortestPath(fromId, toId);
+    const detail = document.getElementById('edge-detail');
+    if (!path || path.length < 2) {
+      detail.innerHTML = `<strong>${fromId} → ${toId}</strong><br/><span style="color:#c084fc">Transitive dependency</span>`;
+      return;
+    }
+    const hops = path.length - 2;
+    const steps = path.map((id, i) => {
+      const isEndpoint = i === 0 || i === path.length - 1;
+      const col = isEndpoint ? '#e2e8f0' : '#94a3b8';
+      return `<span style="color:${col}">${id}</span>`;
+    }).join('<br/><span style="color:#c084fc;font-size:9px">↓ via</span><br/>');
+    detail.innerHTML =
+      `<span style="color:#c084fc;font-weight:bold">◈ Transitive</span>` +
+      `<span style="color:#888;font-size:9px"> · ${hops} hop${hops !== 1 ? 's' : ''}</span>` +
+      `<hr style="border-color:#333;margin:6px 0"/>` +
+      `<div style="line-height:1.9;font-size:10px">${steps}</div>`;
   }
 
   // ── Explorer panel ─────────────────────────────────────────────────────────
@@ -977,12 +1127,24 @@
       lassoEl    = null;
     });
 
+    const btnTrans = document.createElement('button');
+    btnTrans.className = 'tb-btn'; btnTrans.id = 'btn-transitive';
+    btnTrans.textContent = 'Transitive: Off';
+    btnTrans.title = 'Show transitive dependency edges for the focused node';
+    const depthCtrl = document.getElementById('depth-control');
+    depthCtrl.parentNode.insertBefore(btnTrans, depthCtrl);
+    btnTrans.addEventListener('click', () => {
+      showTransitive = !showTransitive;
+      btnTrans.textContent = `Transitive: ${showTransitive ? 'On' : 'Off'}`;
+      btnTrans.style.color = showTransitive ? '#c084fc' : '';
+      rerender();
+    });
+
     // ── Edge mode toggle ──────────────────────────────────────────────────────
     const btnEdge = document.createElement('button');
     btnEdge.className = 'tb-btn'; btnEdge.id = 'btn-edge-mode';
     btnEdge.textContent = '⤡ Bent';
     btnEdge.title = 'Toggle straight / orthogonal edge routing';
-    const depthCtrl = document.getElementById('depth-control');
     depthCtrl.parentNode.insertBefore(btnEdge, depthCtrl);
     btnEdge.addEventListener('click', () => {
       edgeMode = edgeMode === 'straight' ? 'orthogonal' : 'straight';
@@ -1009,7 +1171,7 @@
       document.getElementById('depth-value').textContent = depthValue;
       // Re-layout if a node is focused so the new depth neighbourhood is organised
       if (focusedId) {
-        const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+        const visibleIds = getEffectiveVisibleIds();
         const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
         drawEdges(visibleIds);
         drawNodes(visibleIds);
@@ -1051,7 +1213,7 @@
       if (firstApp) {
         focusedId = firstApp.id;
         updateExplorer();
-        const visibleIds = getVisibleIds(focusedId, depthValue, data.modules, data.edges);
+        const visibleIds = getEffectiveVisibleIds();
         const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
         // Snap to final positions — no animation on startup
         Object.entries(targetPos).forEach(([id, p]) => {
