@@ -20,7 +20,10 @@ object ModuleAnalyser {
             } else {
                 rootProject.subprojects
             }
-        val allProjects: List<Project> = candidates.filter { it.name !in EXCLUDED_PROJECTS }
+        val allProjects: List<Project> =
+            candidates.filter { project ->
+                project.name !in EXCLUDED_PROJECTS && !isContainerProject(project)
+            }
         val projectPaths: Set<String> = allProjects.map { it.path }.toSet()
 
         val modules: List<Module> = allProjects.map { project -> project.toModule() }
@@ -63,6 +66,8 @@ object ModuleAnalyser {
                 }
         }
 }
+
+private fun isContainerProject(project: Project): Boolean = project.subprojects.isNotEmpty() && project.appliedKnownPluginIds().isEmpty()
 
 private fun Project.appliedKnownPluginIds(): Set<String> =
     ModuleTypeInferrer.KNOWN_PLUGIN_IDS
