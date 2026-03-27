@@ -46,11 +46,13 @@ object HtmlReportGenerator {
               --bg: #121220; --surface: #1e1e1e; --surface2: #2b2b2b; --border: #3c3c3c;
               --text: #ccc; --text-dim: #888; --text-faint: #555; --accent: #4fc3f7;
               --btn-bg: #4c5052; --btn-hover: #5c6062;
+              --detail-title: #e2e8f0; --detail-sub: #555; --detail-path: #aaa; --detail-hr: #333;
             }
             :root.light {
               --bg: #f5f5f5; --surface: #ffffff; --surface2: #e8e8e8; --border: #ddd;
               --text: #333; --text-dim: #666; --text-faint: #999; --accent: #0288d1;
               --btn-bg: #d0d0d0; --btn-hover: #bbb;
+              --detail-title: #1a1a1a; --detail-sub: #888; --detail-path: #444; --detail-hr: #ddd;
             }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }

@@ -1174,15 +1174,15 @@
                 const lines = usages.map(ce => {
                   const kindTag = ce.kind === 'INLINE' ? ' <span style="color:#ff9800;font-size:8px">(inline)</span>' : '';
                   if (ce.fromClassId === cls.id) {
-                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:${isLight() ? '#444' : '#aaa'}">${ce.toClassId}</span>${kindTag}`;
+                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:var(--detail-path)">${ce.toClassId}</span>${kindTag}`;
                   } else {
-                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:${isLight() ? '#444' : '#aaa'}">${ce.fromClassId}</span>${kindTag}`;
+                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:var(--detail-path)">${ce.fromClassId}</span>${kindTag}`;
                   }
                 });
                 detail.innerHTML =
-                  `<strong style="color:${isLight() ? '#1a1a1a' : '#e2e8f0'}">${cls.simpleName}</strong>` +
-                  `<div style="color:${isLight() ? '#888' : '#555'};font-size:9px;margin:2px 0">${cls.id}</div>` +
-                  `<hr style="border-color:${isLight() ? '#ddd' : '#333'};margin:6px 0"/>` +
+                  `<strong style="color:var(--detail-title)">${cls.simpleName}</strong>` +
+                  `<div style="color:var(--detail-sub);font-size:9px;margin:2px 0">${cls.id}</div>` +
+                  `<hr style="border-color:var(--detail-hr);margin:6px 0"/>` +
                   `<div style="line-height:1.8;font-size:10px">${lines.join('<br/>')}</div>`;
                 rerender();
               });
@@ -1361,13 +1361,12 @@
     const hops = path.length - 2;
     const steps = path.map((id, i) => {
       const isEndpoint = i === 0 || i === path.length - 1;
-      const col = isEndpoint ? (isLight() ? '#1a1a1a' : '#e2e8f0') : (isLight() ? '#555' : '#94a3b8');
-      return `<span style="color:${col}">${id}</span>`;
+      return `<span style="color:var(${isEndpoint ? '--detail-title' : '--detail-path'})">${id}</span>`;
     }).join('<br/><span style="color:#c084fc;font-size:9px">↓ via</span><br/>');
     detail.innerHTML =
       `<span style="color:#c084fc;font-weight:bold">◈ Transitive</span>` +
-      `<span style="color:${isLight() ? '#666' : '#888'};font-size:9px"> · ${hops} hop${hops !== 1 ? 's' : ''}</span>` +
-      `<hr style="border-color:${isLight() ? '#ddd' : '#333'};margin:6px 0"/>` +
+      `<span style="color:var(--detail-sub);font-size:9px"> · ${hops} hop${hops !== 1 ? 's' : ''}</span>` +
+      `<hr style="border-color:var(--detail-hr);margin:6px 0"/>` +
       `<div style="line-height:1.9;font-size:10px">${steps}</div>`;
   }
 
