@@ -20,6 +20,7 @@ data class BytecodeAnalysisResult(
     val moduleId: String,
     val discoveredClasses: List<DiscoveredClass>,
     val classReferences: Map<String, Set<String>>,
+    val inlineReferences: Map<String, Set<String>>,
 )
 
 class BytecodeClassAnalyser(
@@ -28,6 +29,7 @@ class BytecodeClassAnalyser(
     fun analyse(classDirectories: List<File>): BytecodeAnalysisResult {
         val discoveredClasses: MutableList<DiscoveredClass> = mutableListOf()
         val classReferences: MutableMap<String, MutableSet<String>> = mutableMapOf()
+        val inlineReferences: MutableMap<String, MutableSet<String>> = mutableMapOf()
 
         classDirectories
             .filter { it.exists() && it.isDirectory }
@@ -36,7 +38,7 @@ class BytecodeClassAnalyser(
                     .walkTopDown()
                     .filter { it.isFile && it.extension == "class" }
                     .forEach { classFile ->
-                        analyseClassFile(classFile, discoveredClasses, classReferences)
+                        analyseClassFile(classFile, discoveredClasses, classReferences, inlineReferences)
                     }
             }
 
@@ -44,6 +46,7 @@ class BytecodeClassAnalyser(
             moduleId = moduleId,
             discoveredClasses = discoveredClasses,
             classReferences = classReferences,
+            inlineReferences = inlineReferences,
         )
     }
 
@@ -51,6 +54,7 @@ class BytecodeClassAnalyser(
         classFile: File,
         discoveredClasses: MutableList<DiscoveredClass>,
         classReferences: MutableMap<String, MutableSet<String>>,
+        inlineReferences: MutableMap<String, MutableSet<String>>,
     ) {
         val inputStream: InputStream = classFile.inputStream()
         val classReader = ClassReader(inputStream.use { it.readBytes() })
@@ -70,10 +74,11 @@ class BytecodeClassAnalyser(
                 packageName = packageName,
             )
 
-        val refs: MutableSet<String> = mutableSetOf()
-        classReader.accept(ReferenceCollector(refs), ClassReader.SKIP_FRAMES)
+        val directRefs: MutableSet<String> = mutableSetOf()
+        val smapRefs: MutableSet<String> = mutableSetOf()
+        classReader.accept(ReferenceCollector(directRefs, smapRefs), ClassReader.SKIP_FRAMES)
 
-        val filteredRefs: Set<String> =
+        fun filterRefs(refs: Set<String>): Set<String> =
             refs
                 .filter { it != qualifiedName }
                 .filter { !it.startsWith("java.") && !it.startsWith("javax.") }
@@ -81,14 +86,21 @@ class BytecodeClassAnalyser(
                 .filter { !it.contains('$') }
                 .toSet()
 
-        if (filteredRefs.isNotEmpty()) {
-            classReferences[qualifiedName] = filteredRefs.toMutableSet()
+        val filteredDirect: Set<String> = filterRefs(directRefs)
+        val filteredInline: Set<String> = filterRefs(smapRefs) - filteredDirect
+
+        if (filteredDirect.isNotEmpty()) {
+            classReferences[qualifiedName] = filteredDirect.toMutableSet()
+        }
+        if (filteredInline.isNotEmpty()) {
+            inlineReferences[qualifiedName] = filteredInline.toMutableSet()
         }
     }
 }
 
 private class ReferenceCollector(
     private val refs: MutableSet<String>,
+    private val smapRefs: MutableSet<String>,
 ) : ClassVisitor(Opcodes.ASM9) {
     override fun visit(
         version: Int,
@@ -117,7 +129,7 @@ private class ReferenceCollector(
                 if (trimmed.startsWith("+ ") && !trimmed.startsWith("+ 1 ") && i + 1 < lines.size) {
                     val classLine: String = lines[i + 1].trim()
                     if (classLine.contains("/") && !classLine.startsWith("kotlin/")) {
-                        addInternalName(classLine)
+                        smapRefs += classLine.replace('/', '.')
                     }
                 }
                 i++

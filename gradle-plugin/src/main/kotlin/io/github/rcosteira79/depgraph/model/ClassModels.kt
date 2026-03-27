@@ -30,9 +30,16 @@ data class BoundaryClass(
 )
 
 @Serializable
+enum class EdgeKind {
+    DIRECT,
+    INLINE,
+}
+
+@Serializable
 data class ClassLevelEdge(
     val fromClassId: String,
     val fromModuleId: String,
     val toClassId: String,
     val toModuleId: String,
+    val kind: EdgeKind = EdgeKind.DIRECT,
 )

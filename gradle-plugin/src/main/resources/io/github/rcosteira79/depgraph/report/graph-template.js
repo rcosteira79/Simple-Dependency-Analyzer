@@ -1138,6 +1138,12 @@
               clsRect.setAttribute('fill', isHighlighted ? '#333' : '#252525');
               clsRect.setAttribute('stroke', isHighlighted ? '#fff' : color);
               clsRect.setAttribute('stroke-width', isHighlighted ? '2' : '0.5');
+              // Dashed border for inline-only dependencies
+              const clsEdges = relData.classEdges.filter(ce => ce.fromClassId === cls.id || ce.toClassId === cls.id);
+              const isInlineOnly = clsEdges.length > 0 && clsEdges.every(ce => ce.kind === 'INLINE');
+              if (isInlineOnly) {
+                clsRect.setAttribute('stroke-dasharray', '3,2');
+              }
               clsRect.style.cursor = 'pointer';
               clsRect.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -1148,10 +1154,11 @@
                   ce.fromClassId === cls.id || ce.toClassId === cls.id
                 );
                 const lines = usages.map(ce => {
+                  const kindTag = ce.kind === 'INLINE' ? ' <span style="color:#ff9800;font-size:8px">(inline)</span>' : '';
                   if (ce.fromClassId === cls.id) {
-                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:#aaa">${ce.toClassId}</span>`;
+                    return `<span style="color:#66bb6a">\u2192 uses</span> <span style="color:#aaa">${ce.toClassId}</span>${kindTag}`;
                   } else {
-                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:#aaa">${ce.fromClassId}</span>`;
+                    return `<span style="color:#42a5f5">\u2190 used by</span> <span style="color:#aaa">${ce.fromClassId}</span>${kindTag}`;
                   }
                 });
                 detail.innerHTML =

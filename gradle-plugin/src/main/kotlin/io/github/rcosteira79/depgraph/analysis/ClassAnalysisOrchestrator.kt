@@ -3,6 +3,7 @@ package io.github.rcosteira79.depgraph.analysis
 import io.github.rcosteira79.depgraph.model.BoundaryClass
 import io.github.rcosteira79.depgraph.model.BoundaryType
 import io.github.rcosteira79.depgraph.model.ClassLevelEdge
+import io.github.rcosteira79.depgraph.model.EdgeKind
 import io.github.rcosteira79.depgraph.model.ModuleClassData
 import io.github.rcosteira79.depgraph.model.PackageNode
 
@@ -21,22 +22,8 @@ object ClassAnalysisOrchestrator {
                 }.associateBy { it.qualifiedName }
 
         val allClassEdges: List<ClassLevelEdge> =
-            analysisResults
-                .flatMap { result ->
-                    result.classReferences.flatMap { (sourceClass, targetClasses) ->
-                        val sourceModule: String = result.moduleId
-                        targetClasses.mapNotNull { targetClass ->
-                            val targetModule: String = classToModule[targetClass] ?: return@mapNotNull null
-                            if (targetModule == sourceModule) return@mapNotNull null
-                            ClassLevelEdge(
-                                fromClassId = sourceClass,
-                                fromModuleId = sourceModule,
-                                toClassId = targetClass,
-                                toModuleId = targetModule,
-                            )
-                        }
-                    }
-                }.distinct()
+            buildEdges(analysisResults, classToModule, EdgeKind.DIRECT) +
+                buildEdges(analysisResults, classToModule, EdgeKind.INLINE)
 
         val outgoingByModule: Map<String, Set<String>> =
             allClassEdges
@@ -96,6 +83,34 @@ object ClassAnalysisOrchestrator {
                 )
         }
     }
+
+    private fun buildEdges(
+        analysisResults: List<BytecodeAnalysisResult>,
+        classToModule: Map<String, String>,
+        kind: EdgeKind,
+    ): List<ClassLevelEdge> =
+        analysisResults
+            .flatMap { result ->
+                val refsMap: Map<String, Set<String>> =
+                    when (kind) {
+                        EdgeKind.DIRECT -> result.classReferences
+                        EdgeKind.INLINE -> result.inlineReferences
+                    }
+                refsMap.flatMap { (sourceClass, targetClasses) ->
+                    val sourceModule: String = result.moduleId
+                    targetClasses.mapNotNull { targetClass ->
+                        val targetModule: String = classToModule[targetClass] ?: return@mapNotNull null
+                        if (targetModule == sourceModule) return@mapNotNull null
+                        ClassLevelEdge(
+                            fromClassId = sourceClass,
+                            fromModuleId = sourceModule,
+                            toClassId = targetClass,
+                            toModuleId = targetModule,
+                            kind = kind,
+                        )
+                    }
+                }
+            }.distinct()
 
     private fun combineBoundaryTypes(
         a: BoundaryType,

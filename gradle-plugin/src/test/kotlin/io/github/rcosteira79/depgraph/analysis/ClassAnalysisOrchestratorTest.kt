@@ -21,6 +21,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.app.AppMain" to setOf("com.example.coreui.Button"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputCoreResult =
             BytecodeAnalysisResult(
@@ -30,6 +31,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.coreui.Button", "Button", "com.example.coreui"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         // When:
         val actualResult: Map<String, ModuleClassData> =
@@ -58,6 +60,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.app.AppMain" to setOf("com.example.coreui.Button"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputCoreResult =
             BytecodeAnalysisResult(
@@ -67,6 +70,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.coreui.Button", "Button", "com.example.coreui"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
@@ -93,6 +97,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.top.TopClass" to setOf("com.example.middle.Bridge"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputMiddleResult =
             BytecodeAnalysisResult(
@@ -105,6 +110,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.middle.Bridge" to setOf("com.example.bottom.Foundation"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputBottomResult =
             BytecodeAnalysisResult(
@@ -114,6 +120,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.bottom.Foundation", "Foundation", "com.example.bottom"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
@@ -138,6 +145,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.app.AppMain" to setOf("com.example.coreui.Button"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputCoreResult =
             BytecodeAnalysisResult(
@@ -147,6 +155,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.coreui.Button", "Button", "com.example.coreui"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
@@ -176,6 +185,7 @@ class ClassAnalysisOrchestratorTest {
                         "com.example.app.Login" to setOf("com.example.coreui.Button"),
                         "com.example.app.Signup" to setOf("com.example.coreui.Button"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val inputCoreResult =
             BytecodeAnalysisResult(
@@ -185,6 +195,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.coreui.Button", "Button", "com.example.coreui"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
@@ -211,6 +222,7 @@ class ClassAnalysisOrchestratorTest {
                         DiscoveredClass("com.example.isolated.Internal", "Internal", "com.example.isolated"),
                     ),
                 classReferences = emptyMap(),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
@@ -234,6 +246,7 @@ class ClassAnalysisOrchestratorTest {
                     mapOf(
                         "com.example.app.AppMain" to setOf("com.thirdparty.SomeLib"),
                     ),
+                inlineReferences = emptyMap(),
             )
         val actualResult: Map<String, ModuleClassData> =
             ClassAnalysisOrchestrator.buildClassData(
