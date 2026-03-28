@@ -43,16 +43,21 @@ class DependencyGraphPlugin : Plugin<Project> {
                         val isAndroid: Boolean =
                             subproject.pluginManager.hasPlugin("com.android.application") ||
                                 subproject.pluginManager.hasPlugin("com.android.library")
-                        val compileTaskNames: List<String> =
-                            if (isAndroid) {
-                                val capitalized: String = variant.replaceFirstChar { it.uppercase() }
-                                listOf("compile${capitalized}JavaWithJavac", "compile${capitalized}Kotlin")
-                            } else {
-                                listOf("compileJava", "compileKotlin")
-                            }
-                        compileTaskNames.forEach { taskName ->
-                            subproject.tasks.findByName(taskName)?.let { compileTask ->
-                                task.dependsOn(compileTask)
+                        if (isAndroid) {
+                            // Find compile tasks matching the variant (handles product flavors)
+                            val capitalized: String = variant.replaceFirstChar { it.uppercase() }
+                            subproject.tasks
+                                .matching { t ->
+                                    t.name.contains(capitalized) &&
+                                        (t.name.startsWith("compile") && (t.name.endsWith("Kotlin") || t.name.endsWith("JavaWithJavac")))
+                                }.forEach { compileTask ->
+                                    task.dependsOn(compileTask)
+                                }
+                        } else {
+                            listOf("compileJava", "compileKotlin").forEach { taskName ->
+                                subproject.tasks.findByName(taskName)?.let { compileTask ->
+                                    task.dependsOn(compileTask)
+                                }
                             }
                         }
                     }

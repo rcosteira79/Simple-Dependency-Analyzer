@@ -86,17 +86,44 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
             subproject.pluginManager.hasPlugin("com.android.application") ||
                 subproject.pluginManager.hasPlugin("com.android.library")
 
-        return if (isAndroid) {
-            listOf(
-                File(buildDir, "intermediates/javac/$variant/classes"),
-                File(buildDir, "tmp/kotlin-classes/$variant"),
-            )
-        } else {
-            listOf(
+        if (!isAndroid) {
+            return listOf(
                 File(buildDir, "classes/java/main"),
                 File(buildDir, "classes/kotlin/main"),
             )
         }
+
+        // For Android modules, find class directories matching the variant name.
+        // Handles product flavors (e.g., "demoDebug", "prodDebug") by matching
+        // directories that contain the variant string (e.g., "debug").
+        val kotlinClassesDir: File = File(buildDir, "tmp/kotlin-classes")
+        val javacDir: File = File(buildDir, "intermediates/javac")
+
+        val matchingDirs: MutableList<File> = mutableListOf()
+
+        if (kotlinClassesDir.isDirectory) {
+            kotlinClassesDir
+                .listFiles()
+                ?.filter { it.isDirectory && it.name.contains(variant, ignoreCase = true) }
+                ?.firstOrNull()
+                ?.let { matchingDirs += it }
+        }
+
+        if (javacDir.isDirectory) {
+            javacDir
+                .listFiles()
+                ?.filter { it.isDirectory && it.name.contains(variant, ignoreCase = true) }
+                ?.firstOrNull()
+                ?.let { matchingDirs += File(it, "classes") }
+        }
+
+        // Fallback to exact variant paths if nothing found
+        if (matchingDirs.isEmpty()) {
+            matchingDirs += File(buildDir, "tmp/kotlin-classes/$variant")
+            matchingDirs += File(buildDir, "intermediates/javac/$variant/classes")
+        }
+
+        return matchingDirs
     }
 
     private fun resolveAppName(rootProject: org.gradle.api.Project): String? {
