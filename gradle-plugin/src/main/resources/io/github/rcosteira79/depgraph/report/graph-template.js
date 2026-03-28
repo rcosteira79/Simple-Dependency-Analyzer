@@ -1475,8 +1475,8 @@
       if (event.button !== 0) return;
       if (document.getElementById('nodes').contains(event.target)) return;
 
-      if (event.ctrlKey || event.metaKey) {
-        // Ctrl+click: start lasso selection
+      if (event.metaKey) {
+        // Cmd+click (Mac) / Meta+click: start lasso selection
         const tf = d3.zoomTransform(svg.node());
         const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
         lassoStart = { x: mx, y: my };
