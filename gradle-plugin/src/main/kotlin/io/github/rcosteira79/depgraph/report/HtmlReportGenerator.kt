@@ -85,6 +85,7 @@ object HtmlReportGenerator {
             <span id="app-title" style="font-weight:bold;color:var(--accent)">◈ Simple Dependency Analyser</span>
             <button class="tb-btn" id="btn-reset">↺ Reset</button>
             <button class="tb-btn" id="btn-fit">⤢ Fit</button>
+            <button class="tb-btn" id="btn-inspect" disabled style="opacity:0.4">🔍 Inspect</button>
             <div id="depth-control">
               Depth <input id="depth-slider" type="range" min="1" max="5" value="1" style="width:80px">
               <span id="depth-value" style="color:#4fc3f7;font-weight:bold">1</span>

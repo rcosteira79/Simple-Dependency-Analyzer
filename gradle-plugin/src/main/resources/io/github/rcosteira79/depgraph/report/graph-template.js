@@ -100,12 +100,34 @@
     });
   }
 
+  function updateInspectButton() {
+    const btn = document.getElementById('btn-inspect');
+    if (!btn) return;
+    if (inspectedModuleId) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = '✕ Exit Inspection';
+      btn.style.color = '#e53935';
+    } else if (focusedId && hasClassData && data.classData[focusedId] && data.classData[focusedId].packages.length > 0) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.textContent = '🔍 Inspect';
+      btn.style.color = '';
+    } else {
+      btn.disabled = true;
+      btn.style.opacity = '0.4';
+      btn.textContent = '🔍 Inspect';
+      btn.style.color = '';
+    }
+  }
+
   function enterInspection(moduleId) {
     if (!hasClassData || !data.classData[moduleId]) return;
     inspectedModuleId = moduleId;
     inspectionTargetId = null;
     expandedPackages.clear();
     highlightedClassId = null;
+    updateInspectButton();
     rerender();
   }
 
@@ -115,6 +137,7 @@
     inspectionTargetId = null;
     expandedPackages.clear();
     highlightedClassId = null;
+    updateInspectButton();
     rerender();
   }
 
@@ -1030,29 +1053,6 @@
         });
 
       d3.select(g).call(drag).style('cursor', 'grab');
-
-      function showNodeContextMenu(event) {
-        event.preventDefault();
-        event.stopPropagation();
-        const items = [];
-        if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && m.id !== inspectedModuleId) {
-          items.push({ label: 'Inspect', action: () => enterInspection(m.id) });
-        }
-        if (m.id === inspectedModuleId) {
-          items.push({ label: 'Exit inspection', action: () => exitInspection() });
-        }
-        if (items.length > 0) showContextMenu(event.clientX, event.clientY, items);
-      }
-
-      // Native contextmenu (right-click on mouse)
-      g.addEventListener('contextmenu', showNodeContextMenu);
-
-      // Ctrl+click (Mac two-finger click triggers mousedown with ctrlKey+button 0)
-      g.addEventListener('mousedown', function (event) {
-        if (event.button === 0 && event.ctrlKey) {
-          showNodeContextMenu(event);
-        }
-      });
     });
   }
 
@@ -1091,16 +1091,6 @@
     title.setAttribute('opacity', isDim ? '0.12' : '1');
     title.textContent = m.id;
     title.style.cursor = 'pointer';
-    function showTitleContextMenu(event) {
-      event.preventDefault(); event.stopPropagation();
-      showContextMenu(event.clientX, event.clientY, [
-        { label: 'Exit inspection', action: () => exitInspection() },
-      ]);
-    }
-    title.addEventListener('contextmenu', showTitleContextMenu);
-    title.addEventListener('mousedown', (event) => {
-      if (event.button === 0 && event.ctrlKey) showTitleContextMenu(event);
-    });
     g.appendChild(title);
 
     const relData = inspectionTargetId ? getRelationshipData(inspectedModuleId, inspectionTargetId) : null;
@@ -1327,6 +1317,7 @@
     const wasFocused = focusedId === id;
     focusedId = wasFocused ? null : id;
     updateExplorer();
+    updateInspectButton();
 
     if (focusedId) {
       const visibleIds = getEffectiveVisibleIds();
@@ -1731,7 +1722,15 @@
       highlightedClassId = null;
       showInterDeps = false;
       updateExplorer();
+      updateInspectButton();
       rerender();
+    });
+    document.getElementById('btn-inspect').addEventListener('click', () => {
+      if (inspectedModuleId) {
+        exitInspection();
+      } else if (focusedId) {
+        enterInspection(focusedId);
+      }
     });
     document.getElementById('btn-fit').addEventListener('click', () => {
       const { width: svgW, height: svgH } = document.getElementById('graph-svg').getBoundingClientRect();
