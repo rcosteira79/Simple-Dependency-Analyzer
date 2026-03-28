@@ -1424,21 +1424,21 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
-    // Mouse wheel = zoom; ctrl+wheel = horizontal scroll; middle mouse drag = pan.
+    // Pinch (ctrl+wheel) = zoom; two-finger swipe (plain wheel) = pan.
+    // Middle mouse drag = pan. Left drag = pan (handled separately below).
     const zoom = d3.zoom()
-      .filter(event => (event.type === 'wheel' && !event.ctrlKey) || event.button === 1)
+      .filter(event => (event.type === 'wheel' && event.ctrlKey) || event.button === 1)
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
 
-    // ctrl+wheel → horizontal pan
+    // Two-finger trackpad swipe (plain wheel without ctrl) → pan
     svg.node().addEventListener('wheel', event => {
-      if (!event.ctrlKey) return;
+      if (event.ctrlKey) return; // pinch zoom handled by d3 above
       event.preventDefault();
       const tf = d3.zoomTransform(svg.node());
-      const newTf = tf.translate(-event.deltaY / tf.k, 0);
-      svg.call(zoom.transform, newTf);
+      svg.call(zoom.transform, tf.translate(-event.deltaX / tf.k, -event.deltaY / tf.k));
     }, { passive: false });
 
     // Prevent middle-click autoscroll cursor
