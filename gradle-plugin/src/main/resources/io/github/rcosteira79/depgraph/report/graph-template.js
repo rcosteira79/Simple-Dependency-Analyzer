@@ -108,7 +108,7 @@
       btn.style.opacity = '1';
       btn.textContent = '✕ Exit Inspection';
       btn.style.color = '#e53935';
-    } else if (focusedId && hasClassData && data.classData[focusedId] && data.classData[focusedId].packages.length > 0) {
+    } else if (focusedId && hasClassData) {
       btn.disabled = false;
       btn.style.opacity = '1';
       btn.textContent = '🔍 Inspect';
