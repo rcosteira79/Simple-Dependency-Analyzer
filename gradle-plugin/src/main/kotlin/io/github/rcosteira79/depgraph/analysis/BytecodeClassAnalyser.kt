@@ -65,14 +65,24 @@ class BytecodeClassAnalyser(
         val packageName: String = qualifiedName.substringBeforeLast('.', "")
 
         if (GeneratedClassFilter.isGenerated(simpleName, classFile.parentFile)) return
-        if (simpleName.contains('$')) return // skip inner/anonymous classes
 
-        discoveredClasses +=
-            DiscoveredClass(
-                qualifiedName = qualifiedName,
-                simpleName = simpleName,
-                packageName = packageName,
-            )
+        val isInnerClass: Boolean = simpleName.contains('$')
+        // For inner/anonymous classes, attribute references to the outer class
+        val ownerName: String =
+            if (isInnerClass) {
+                qualifiedName.substringBefore('$')
+            } else {
+                qualifiedName
+            }
+
+        if (!isInnerClass) {
+            discoveredClasses +=
+                DiscoveredClass(
+                    qualifiedName = qualifiedName,
+                    simpleName = simpleName,
+                    packageName = packageName,
+                )
+        }
 
         val directRefs: MutableSet<String> = mutableSetOf()
         val smapRefs: MutableSet<String> = mutableSetOf()
@@ -80,7 +90,7 @@ class BytecodeClassAnalyser(
 
         fun filterRefs(refs: Set<String>): Set<String> =
             refs
-                .filter { it != qualifiedName }
+                .filter { it != qualifiedName && it != ownerName }
                 .filter { !it.startsWith("java.") && !it.startsWith("javax.") }
                 .filter { !it.startsWith("kotlin.") && !it.startsWith("kotlinx.") }
                 .filter { !it.contains('$') }
@@ -90,10 +100,10 @@ class BytecodeClassAnalyser(
         val filteredInline: Set<String> = filterRefs(smapRefs) - filteredDirect
 
         if (filteredDirect.isNotEmpty()) {
-            classReferences[qualifiedName] = filteredDirect.toMutableSet()
+            classReferences.getOrPut(ownerName) { mutableSetOf() } += filteredDirect
         }
         if (filteredInline.isNotEmpty()) {
-            inlineReferences[qualifiedName] = filteredInline.toMutableSet()
+            inlineReferences.getOrPut(ownerName) { mutableSetOf() } += filteredInline
         }
     }
 }
