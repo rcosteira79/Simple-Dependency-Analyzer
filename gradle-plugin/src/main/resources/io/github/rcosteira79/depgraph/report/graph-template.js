@@ -992,6 +992,7 @@
       let dragOrigin  = null;
 
       const drag = d3.drag()
+        .filter(event => !event.ctrlKey && event.button === 0)
         .on('start', function (event) {
           dragMoved   = false;
           prevDragPos = { x: event.x, y: event.y };
@@ -1273,6 +1274,7 @@
 
     // Make draggable
     const drag = d3.drag()
+      .filter(event => !event.ctrlKey && event.button === 0)
       .on('start', function (event) { d3.select(this).raise(); })
       .on('drag', function (event) {
         nodePos[m.id].x += event.dx;
