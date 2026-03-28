@@ -1424,21 +1424,40 @@
     const svg     = d3.select('#graph-svg');
     const content = d3.select('#graph-content');
 
-    // Pinch (ctrl+wheel) = zoom; two-finger swipe (plain wheel) = pan.
-    // Middle mouse drag = pan. Left drag = pan (handled separately below).
+    // D3 zoom is used only as a transform store and for animated transitions (fit button).
+    // All wheel/pan interactions are handled manually for full trackpad compatibility.
     const zoom = d3.zoom()
-      .filter(event => (event.type === 'wheel' && event.ctrlKey) || event.button === 1)
+      .filter(() => false) // disable all d3 default interactions
       .scaleExtent([0.05, 4])
       .on('zoom', event => content.attr('transform', event.transform));
 
     svg.call(zoom).on('dblclick.zoom', null);
 
-    // Two-finger trackpad swipe (plain wheel without ctrl) → pan
+    function applyTransform(tf) {
+      // Clamp scale
+      const k = Math.max(0.05, Math.min(4, tf.k));
+      const clamped = d3.zoomIdentity.translate(tf.x, tf.y).scale(k);
+      svg.node().__zoom = clamped;
+      content.attr('transform', clamped.toString());
+    }
+
+    // All wheel events: pinch (ctrlKey) = zoom, swipe (no ctrlKey) = pan
     svg.node().addEventListener('wheel', event => {
-      if (event.ctrlKey) return; // pinch zoom handled by d3 above
       event.preventDefault();
       const tf = d3.zoomTransform(svg.node());
-      svg.call(zoom.transform, tf.translate(-event.deltaX / tf.k, -event.deltaY / tf.k));
+
+      if (event.ctrlKey) {
+        // Pinch-to-zoom (or ctrl+scroll): zoom centred on cursor
+        const [mx, my] = d3.pointer(event, svg.node());
+        const factor = Math.pow(2, -event.deltaY * 0.01);
+        const k = Math.max(0.05, Math.min(4, tf.k * factor));
+        const newX = mx - (mx - tf.x) * k / tf.k;
+        const newY = my - (my - tf.y) * k / tf.k;
+        applyTransform(d3.zoomIdentity.translate(newX, newY).scale(k));
+      } else {
+        // Two-finger swipe / scroll wheel: pan
+        applyTransform(tf.translate(-event.deltaX / tf.k, -event.deltaY / tf.k));
+      }
     }, { passive: false });
 
     // Prevent middle-click autoscroll cursor
@@ -1485,7 +1504,7 @@
         const dy = event.clientY - panStart.y;
         panStart = { x: event.clientX, y: event.clientY };
         const tf = d3.zoomTransform(svg.node());
-        svg.call(zoom.transform, tf.translate(dx / tf.k, dy / tf.k));
+        applyTransform(tf.translate(dx / tf.k, dy / tf.k));
       }
     });
 
