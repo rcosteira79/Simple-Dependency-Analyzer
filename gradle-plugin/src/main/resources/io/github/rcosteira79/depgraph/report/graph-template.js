@@ -1101,7 +1101,27 @@
       msg.setAttribute('x', 0); msg.setAttribute('y', 8);
       msg.setAttribute('text-anchor', 'middle'); msg.setAttribute('font-size', '9');
       msg.setAttribute('font-family', 'monospace'); msg.setAttribute('fill', '#555');
-      msg.textContent = inspectionTargetId ? 'No class dependencies with this module' : 'Click a module to see class dependencies';
+      if (!inspectionTargetId) {
+        msg.textContent = 'Click a module to see class dependencies';
+      } else {
+        // Check if there's a module-level edge despite no class deps
+        const hasModuleEdge = data.edges.some(e =>
+          (e.from === inspectedModuleId && e.to === inspectionTargetId) ||
+          (e.from === inspectionTargetId && e.to === inspectedModuleId)
+        );
+        if (hasModuleEdge) {
+          msg.setAttribute('fill', '#f5a623');
+          msg.textContent = '⚠ Declared dependency but no class references found';
+          const hint = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          hint.setAttribute('x', 0); hint.setAttribute('y', 26);
+          hint.setAttribute('text-anchor', 'middle'); hint.setAttribute('font-size', '8');
+          hint.setAttribute('font-family', 'monospace'); hint.setAttribute('fill', '#888');
+          hint.textContent = 'This dependency may be unused or only needed at runtime';
+          g.appendChild(hint);
+        } else {
+          msg.textContent = 'No class dependencies with this module';
+        }
+      }
       g.appendChild(msg);
     } else {
       // Show target's classes grouped by zone
