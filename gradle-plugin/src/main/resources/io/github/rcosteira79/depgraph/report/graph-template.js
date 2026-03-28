@@ -61,9 +61,11 @@
 
   // ── Context menu ──────────────────────────────────────────────────────────
   let contextMenu = null;
+  let contextMenuOpenedAt = 0;
 
   function showContextMenu(x, y, items) {
     hideContextMenu();
+    contextMenuOpenedAt = Date.now();
     const menu = document.createElement('div');
     menu.id = 'ctx-menu';
     menu.style.cssText = `position:fixed;left:${x}px;top:${y}px;background:#2b2b2b;border:1px solid #555;border-radius:4px;padding:4px 0;z-index:9999;min-width:140px;box-shadow:0 4px 12px rgba(0,0,0,0.4);`;
@@ -84,7 +86,10 @@
     if (contextMenu) { contextMenu.remove(); contextMenu = null; }
   }
 
-  document.addEventListener('click', hideContextMenu);
+  // Ignore clicks within 300ms of opening (Mac two-finger click fires click right after contextmenu)
+  document.addEventListener('click', () => {
+    if (Date.now() - contextMenuOpenedAt > 300) hideContextMenu();
+  });
 
   // ── Inspection / highlight logic ────────────────────────────────────────
   function cleanUpSubPositions() {
@@ -1026,8 +1031,9 @@
 
       d3.select(g).call(drag).style('cursor', 'grab');
 
-      d3.select(g).on('contextmenu', function (event) {
+      function showNodeContextMenu(event) {
         event.preventDefault();
+        event.stopPropagation();
         const items = [];
         if (hasClassData && data.classData[m.id] && data.classData[m.id].packages.length > 0 && m.id !== inspectedModuleId) {
           items.push({ label: 'Inspect', action: () => enterInspection(m.id) });
@@ -1036,6 +1042,16 @@
           items.push({ label: 'Exit inspection', action: () => exitInspection() });
         }
         if (items.length > 0) showContextMenu(event.clientX, event.clientY, items);
+      }
+
+      // Native contextmenu (right-click on mouse)
+      g.addEventListener('contextmenu', showNodeContextMenu);
+
+      // Ctrl+click (Mac two-finger click triggers mousedown with ctrlKey+button 0)
+      g.addEventListener('mousedown', function (event) {
+        if (event.button === 0 && event.ctrlKey) {
+          showNodeContextMenu(event);
+        }
       });
     });
   }
@@ -1075,11 +1091,15 @@
     title.setAttribute('opacity', isDim ? '0.12' : '1');
     title.textContent = m.id;
     title.style.cursor = 'pointer';
-    title.addEventListener('contextmenu', (event) => {
+    function showTitleContextMenu(event) {
       event.preventDefault(); event.stopPropagation();
       showContextMenu(event.clientX, event.clientY, [
         { label: 'Exit inspection', action: () => exitInspection() },
       ]);
+    }
+    title.addEventListener('contextmenu', showTitleContextMenu);
+    title.addEventListener('mousedown', (event) => {
+      if (event.button === 0 && event.ctrlKey) showTitleContextMenu(event);
     });
     g.appendChild(title);
 
