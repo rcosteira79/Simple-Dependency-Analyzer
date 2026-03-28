@@ -94,30 +94,37 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
         }
 
         // For Android modules, find class directories matching the variant name.
-        // Handles product flavors (e.g., "demoDebug", "prodDebug") by matching
-        // directories that contain the variant string (e.g., "debug").
-        val kotlinClassesDir: File = File(buildDir, "tmp/kotlin-classes")
-        val javacDir: File = File(buildDir, "intermediates/javac")
-
+        // Handles product flavors (e.g., "demoDebug", "prodDebug") and different
+        // AGP layouts (tmp/kotlin-classes, intermediates/built_in_kotlinc, intermediates/javac).
         val matchingDirs: MutableList<File> = mutableListOf()
 
-        if (kotlinClassesDir.isDirectory) {
-            kotlinClassesDir
+        val searchRoots: List<File> =
+            listOf(
+                File(buildDir, "tmp/kotlin-classes"),
+                File(buildDir, "intermediates/javac"),
+                File(buildDir, "intermediates/built_in_kotlinc"),
+            )
+
+        searchRoots.forEach { root ->
+            if (!root.isDirectory) return@forEach
+            root
                 .listFiles()
                 ?.filter { it.isDirectory && it.name.contains(variant, ignoreCase = true) }
                 ?.firstOrNull()
-                ?.let { matchingDirs += it }
+                ?.let { variantDir ->
+                    // Some layouts have classes directly in the variant dir,
+                    // others nest them under taskName/classes
+                    val nested: File? =
+                        variantDir
+                            .walkTopDown()
+                            .maxDepth(2)
+                            .filter { it.isDirectory && it.name == "classes" }
+                            .firstOrNull()
+                    matchingDirs += nested ?: variantDir
+                }
         }
 
-        if (javacDir.isDirectory) {
-            javacDir
-                .listFiles()
-                ?.filter { it.isDirectory && it.name.contains(variant, ignoreCase = true) }
-                ?.firstOrNull()
-                ?.let { matchingDirs += File(it, "classes") }
-        }
-
-        // Fallback to exact variant paths if nothing found
+        // Fallback to common paths if nothing found
         if (matchingDirs.isEmpty()) {
             matchingDirs += File(buildDir, "tmp/kotlin-classes/$variant")
             matchingDirs += File(buildDir, "intermediates/javac/$variant/classes")
