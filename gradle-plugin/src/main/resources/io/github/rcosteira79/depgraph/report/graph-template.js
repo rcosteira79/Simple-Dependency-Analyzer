@@ -1446,59 +1446,85 @@
       if (event.button === 1) event.preventDefault();
     }, { passive: false });
 
-    // ── Rubber-band multi-select (left drag on background) ────────────────────
+    // ── Left drag on background = pan; Ctrl+left drag = lasso multi-select ───
+    let panStart  = null;
+    let panOrigin = null;
     let lassoStart = null;
     let lassoEl    = null;
 
-    svg.on('mousedown.lasso', function (event) {
+    svg.on('mousedown.bg', function (event) {
       if (event.button !== 0) return;
       if (document.getElementById('nodes').contains(event.target)) return;
 
-      const tf = d3.zoomTransform(svg.node());
-      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
-      lassoStart = { x: mx, y: my };
-      lassoEl = content.append('rect')
-        .attr('x', mx).attr('y', my).attr('width', 0).attr('height', 0)
-        .attr('fill', 'rgba(79,195,247,0.07)')
-        .attr('stroke', '#4fc3f7').attr('stroke-width', 1)
-        .attr('stroke-dasharray', '4,2').attr('pointer-events', 'none');
-    });
-
-    svg.on('mousemove.lasso', function (event) {
-      if (!lassoStart) return;
-      const tf = d3.zoomTransform(svg.node());
-      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
-      lassoEl
-        .attr('x', Math.min(lassoStart.x, mx)).attr('y', Math.min(lassoStart.y, my))
-        .attr('width', Math.abs(mx - lassoStart.x)).attr('height', Math.abs(my - lassoStart.y));
-    });
-
-    svg.on('mouseup.lasso', function (event) {
-      if (!lassoStart) return;
-      const tf = d3.zoomTransform(svg.node());
-      const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
-      const wasDrag = Math.abs(mx - lassoStart.x) > 4 || Math.abs(my - lassoStart.y) > 4;
-
-      if (wasDrag) {
-        const x1 = Math.min(lassoStart.x, mx), x2 = Math.max(lassoStart.x, mx);
-        const y1 = Math.min(lassoStart.y, my), y2 = Math.max(lassoStart.y, my);
-        const hw = NODE_W / 2, hh = NODE_H / 2;
-        selectedIds = new Set();
-        data.modules.forEach(m => {
-          const pos = nodePos[m.id];
-          if (pos && pos.x + hw >= x1 && pos.x - hw <= x2 && pos.y + hh >= y1 && pos.y - hh <= y2) {
-            selectedIds.add(m.id);
-          }
-        });
-        rerender();
-      } else if (selectedIds.size > 0) {
-        selectedIds = new Set();
-        rerender();
+      if (event.ctrlKey || event.metaKey) {
+        // Ctrl+click: start lasso selection
+        const tf = d3.zoomTransform(svg.node());
+        const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+        lassoStart = { x: mx, y: my };
+        lassoEl = content.append('rect')
+          .attr('x', mx).attr('y', my).attr('width', 0).attr('height', 0)
+          .attr('fill', 'rgba(79,195,247,0.07)')
+          .attr('stroke', '#4fc3f7').attr('stroke-width', 1)
+          .attr('stroke-dasharray', '4,2').attr('pointer-events', 'none');
+      } else {
+        // Normal click: start panning
+        panOrigin = panStart = { x: event.clientX, y: event.clientY };
+        svg.style('cursor', 'grabbing');
       }
+    });
 
-      lassoEl?.remove();
-      lassoStart = null;
-      lassoEl    = null;
+    svg.on('mousemove.bg', function (event) {
+      if (lassoStart) {
+        const tf = d3.zoomTransform(svg.node());
+        const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+        lassoEl
+          .attr('x', Math.min(lassoStart.x, mx)).attr('y', Math.min(lassoStart.y, my))
+          .attr('width', Math.abs(mx - lassoStart.x)).attr('height', Math.abs(my - lassoStart.y));
+      } else if (panStart) {
+        const dx = event.clientX - panStart.x;
+        const dy = event.clientY - panStart.y;
+        panStart = { x: event.clientX, y: event.clientY };
+        const tf = d3.zoomTransform(svg.node());
+        svg.call(zoom.transform, tf.translate(dx / tf.k, dy / tf.k));
+      }
+    });
+
+    svg.on('mouseup.bg', function (event) {
+      if (lassoStart) {
+        const tf = d3.zoomTransform(svg.node());
+        const [mx, my] = tf.invert(d3.pointer(event, svg.node()));
+        const wasDrag = Math.abs(mx - lassoStart.x) > 4 || Math.abs(my - lassoStart.y) > 4;
+
+        if (wasDrag) {
+          const x1 = Math.min(lassoStart.x, mx), x2 = Math.max(lassoStart.x, mx);
+          const y1 = Math.min(lassoStart.y, my), y2 = Math.max(lassoStart.y, my);
+          const hw = NODE_W / 2, hh = NODE_H / 2;
+          selectedIds = new Set();
+          data.modules.forEach(m => {
+            const pos = nodePos[m.id];
+            if (pos && pos.x + hw >= x1 && pos.x - hw <= x2 && pos.y + hh >= y1 && pos.y - hh <= y2) {
+              selectedIds.add(m.id);
+            }
+          });
+          rerender();
+        }
+
+        lassoEl?.remove();
+        lassoStart = null;
+        lassoEl    = null;
+      } else if (panOrigin) {
+        svg.style('cursor', null);
+        const wasDrag = Math.abs(event.clientX - panOrigin.x) > 3 || Math.abs(event.clientY - panOrigin.y) > 3;
+        panStart = panOrigin = null;
+        if (!wasDrag && selectedIds.size > 0) {
+          selectedIds = new Set();
+          rerender();
+        }
+      }
+    });
+
+    svg.on('mouseleave.bg', function () {
+      if (panStart) { svg.style('cursor', null); panStart = panOrigin = null; }
     });
 
     const btnTrans = document.createElement('button');
