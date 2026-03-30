@@ -5,5 +5,6 @@ enum class ModuleType {
     FEATURE,
     CORE,
     DATA,
+    TEST,
     UNKNOWN,
 }

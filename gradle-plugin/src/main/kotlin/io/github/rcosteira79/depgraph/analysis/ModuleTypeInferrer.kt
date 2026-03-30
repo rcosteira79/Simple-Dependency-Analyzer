@@ -20,6 +20,7 @@ object ModuleTypeInferrer {
         when {
             pluginIds.contains("com.android.application") -> ModuleType.APP
             pluginIds.contains("com.android.dynamic-feature") -> ModuleType.FEATURE
+            isTestByPath(modulePath, moduleName) -> ModuleType.TEST
             isFeatureByPath(modulePath, moduleName) -> ModuleType.FEATURE
             pluginIds.contains("com.android.library") && isDataByPath(modulePath, moduleName) -> ModuleType.DATA
             pluginIds.contains("com.android.library") -> ModuleType.CORE
@@ -36,6 +37,14 @@ object ModuleTypeInferrer {
             modulePath.contains(":feature:") ||
             moduleName.startsWith("feature-") ||
             moduleName.startsWith("feature:")
+
+    private fun isTestByPath(
+        modulePath: String,
+        moduleName: String,
+    ): Boolean =
+        modulePath.contains(":test") ||
+            modulePath.contains("/test") ||
+            moduleName.contains("test", ignoreCase = true)
 
     /**
      * Returns true if the module's path or name indicates a data module.

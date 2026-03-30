@@ -81,7 +81,7 @@ class ModuleTypeInferrerTest {
                     "core-utils",
                     ModuleType.CORE,
                 ),
-                Arguments.of("no recognised plugin -> UNKNOWN", emptySet<String>(), ":some-module", "some-module", ModuleType.UNKNOWN),
+                Arguments.of("no recognized plugin -> UNKNOWN", emptySet<String>(), ":some-module", "some-module", ModuleType.UNKNOWN),
                 Arguments.of(
                     "com.android.application beats feature path",
                     setOf("com.android.application"),
@@ -123,6 +123,34 @@ class ModuleTypeInferrerTest {
                     ":some-module",
                     "network-data",
                     ModuleType.DATA,
+                ),
+                Arguments.of(
+                    "name containing test -> TEST",
+                    setOf("com.android.library"),
+                    ":core:testing",
+                    "testing",
+                    ModuleType.TEST,
+                ),
+                Arguments.of(
+                    "path containing :test -> TEST",
+                    setOf("com.android.library"),
+                    ":core:test-utils",
+                    "test-utils",
+                    ModuleType.TEST,
+                ),
+                Arguments.of(
+                    "name with ui-test-hilt-manifest -> TEST",
+                    setOf("com.android.library"),
+                    ":ui-test-hilt-manifest",
+                    "ui-test-hilt-manifest",
+                    ModuleType.TEST,
+                ),
+                Arguments.of(
+                    "test detection beats feature path",
+                    setOf("com.android.library"),
+                    ":feature:test-utils",
+                    "test-utils",
+                    ModuleType.TEST,
                 ),
             )
     }
