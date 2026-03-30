@@ -26,11 +26,11 @@ gradlePlugin {
     website = "https://github.com/rcosteira79/dependency-graph"
     vcsUrl = "https://github.com/rcosteira79/dependency-graph"
     plugins {
-        create("simpleDependencyAnalyser") {
-            id = "io.github.rcosteira79.simple-dependency-analyser"
+        create("simpleDependencyAnalyzer") {
+            id = "io.github.rcosteira79.simple-dependency-analyzer"
             implementationClass = "io.github.rcosteira79.depgraph.DependencyGraphPlugin"
-            displayName = "Simple Dependency Analyser"
-            description = "Visualises and analyses your Gradle multi-module dependency architecture"
+            displayName = "Simple Dependency Analyzer"
+            description = "Visualizes and analyzes your Gradle multi-module dependency architecture"
             tags = listOf("android", "dependency-graph", "architecture", "visualization")
         }
     }

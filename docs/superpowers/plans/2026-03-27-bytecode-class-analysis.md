@@ -18,10 +18,10 @@
 |------|---------------|
 | `src/main/kotlin/io/github/rcosteira79/depgraph/model/ClassModels.kt` | `ModuleClassData`, `PackageNode`, `BoundaryType`, `BoundaryClass`, `ClassLevelEdge` |
 | `src/main/kotlin/io/github/rcosteira79/depgraph/analysis/GeneratedClassFilter.kt` | Name-based + directory-based filtering of generated classes |
-| `src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyser.kt` | ASM-based scanner: reads `.class` files, extracts class refs |
+| `src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzer.kt` | ASM-based scanner: reads `.class` files, extracts class refs |
 | `src/main/kotlin/io/github/rcosteira79/depgraph/analysis/ClassAnalysisOrchestrator.kt` | Orchestrates per-module analysis, computes boundary classes, groups by package |
 | `src/test/kotlin/io/github/rcosteira79/depgraph/analysis/GeneratedClassFilterTest.kt` | Tests for filter logic |
-| `src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyserTest.kt` | Tests for bytecode scanning |
+| `src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzerTest.kt` | Tests for bytecode scanning |
 | `src/test/kotlin/io/github/rcosteira79/depgraph/analysis/ClassAnalysisOrchestratorTest.kt` | Tests for orchestration + boundary computation |
 
 ### Modified files (Kotlin)
@@ -156,7 +156,7 @@ open class DependencyGraphExtension {
     /** Override the inferred module type. Valid values: app, feature, core, data, unknown */
     var moduleType: String? = null
 
-    /** Android build variant to analyse for class dependencies. Ignored for JVM modules. */
+    /** Android build variant to analyze for class dependencies. Ignored for JVM modules. */
     var variant: String = "debug"
 }
 ```
@@ -183,7 +183,7 @@ No changes needed — `HtmlReportGeneratorTest` doesn't assert on `schemaVersion
 
 - [ ] **Step 7: Run tests to verify nothing is broken**
 
-Run: `cd gradle-plugin && ./gradlew test --tests '*GraphSerializerTest*' --tests '*HtmlReportGeneratorTest*' --tests '*ModuleAnalyserTest*' -q`
+Run: `cd gradle-plugin && ./gradlew test --tests '*GraphSerializerTest*' --tests '*HtmlReportGeneratorTest*' --tests '*ModuleAnalyzerTest*' -q`
 
 Expected: all tests pass. Schema version is now 2 everywhere. The `classData` field defaults to `null` so existing tests continue to work.
 
@@ -379,17 +379,17 @@ git commit -m "Add GeneratedClassFilter for name and directory based filtering"
 
 ---
 
-### Task 3: BytecodeClassAnalyser
+### Task 3: BytecodeClassAnalyzer
 
 **Files:**
-- Create: `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyserTest.kt`
-- Create: `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyser.kt`
+- Create: `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzerTest.kt`
+- Create: `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzer.kt`
 
-The analyser needs compiled `.class` files as input. The test will compile small Java source files at test time into a temp directory, then feed those `.class` files to the analyser.
+The analyzer needs compiled `.class` files as input. The test will compile small Java source files at test time into a temp directory, then feed those `.class` files to the analyzer.
 
 - [ ] **Step 1: Write the failing tests**
 
-Create `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyserTest.kt`:
+Create `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzerTest.kt`:
 
 ```kotlin
 package io.github.rcosteira79.depgraph.analysis
@@ -401,7 +401,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import javax.tools.ToolProvider
 
-class BytecodeClassAnalyserTest {
+class BytecodeClassAnalyzerTest {
     @Test
     fun `discovers classes in a directory`(@TempDir tempDir: File) {
         // Given: two compiled classes
@@ -416,10 +416,10 @@ class BytecodeClassAnalyserTest {
                 public class Bar {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then:
         val actualClassNames: Set<String> = actualResult.discoveredClasses.map { it.qualifiedName }.toSet()
@@ -440,10 +440,10 @@ class BytecodeClassAnalyserTest {
                 public class Foo { private Bar bar; }
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then: Foo references Bar
         val actualFooRefs: Set<String> = actualResult.classReferences["com.example.Foo"] ?: emptySet()
@@ -464,10 +464,10 @@ class BytecodeClassAnalyserTest {
                 public class Service { public Result process() { return null; } }
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then:
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Service"] ?: emptySet()
@@ -488,10 +488,10 @@ class BytecodeClassAnalyserTest {
                 public class Child extends Base {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then:
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Child"] ?: emptySet()
@@ -512,10 +512,10 @@ class BytecodeClassAnalyserTest {
                 public class Button implements Clickable {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then:
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Button"] ?: emptySet()
@@ -536,10 +536,10 @@ class BytecodeClassAnalyserTest {
                 public class Foo { public Bar create() { return new Bar(); } }
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then:
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Foo"] ?: emptySet()
@@ -556,10 +556,10 @@ class BytecodeClassAnalyserTest {
                 public class Hilt_MyActivity {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then: generated class is excluded
         assertTrue(actualResult.discoveredClasses.none { it.qualifiedName == "com.example.Hilt_MyActivity" })
@@ -575,10 +575,10 @@ class BytecodeClassAnalyserTest {
                 public class Standalone {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then: no self-reference
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Standalone"] ?: emptySet()
@@ -596,10 +596,10 @@ class BytecodeClassAnalyserTest {
                 public class Holder { private List<String> items; }
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         // Then: java.util.List and java.lang.String are not in references
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Holder"] ?: emptySet()
@@ -623,10 +623,10 @@ class BytecodeClassAnalyserTest {
                 public class KotlinClass {}
             """.trimIndent(),
         )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(javaClassesDir, kotlinClassesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(javaClassesDir, kotlinClassesDir))
 
         // Then:
         val actualClassNames: Set<String> = actualResult.discoveredClasses.map { it.qualifiedName }.toSet()
@@ -637,10 +637,10 @@ class BytecodeClassAnalyserTest {
     fun `returns empty result for empty directories`(@TempDir tempDir: File) {
         // Given: an empty directory
         val emptyDir: File = File(tempDir, "empty").also { it.mkdirs() }
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(emptyDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(emptyDir))
 
         // Then:
         assertTrue(actualResult.discoveredClasses.isEmpty())
@@ -651,10 +651,10 @@ class BytecodeClassAnalyserTest {
     fun `returns empty result for nonexistent directories`(@TempDir tempDir: File) {
         // Given: a directory that does not exist
         val missingDir = File(tempDir, "does-not-exist")
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
         // When:
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(missingDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(missingDir))
 
         // Then:
         assertTrue(actualResult.discoveredClasses.isEmpty())
@@ -690,13 +690,13 @@ class BytecodeClassAnalyserTest {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd gradle-plugin && ./gradlew test --tests '*BytecodeClassAnalyserTest*' -q`
+Run: `cd gradle-plugin && ./gradlew test --tests '*BytecodeClassAnalyzerTest*' -q`
 
-Expected: FAIL — `BytecodeClassAnalyser` and `BytecodeAnalysisResult` do not exist.
+Expected: FAIL — `BytecodeClassAnalyzer` and `BytecodeAnalysisResult` do not exist.
 
 - [ ] **Step 3: Write the implementation**
 
-Create `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyser.kt`:
+Create `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzer.kt`:
 
 ```kotlin
 package io.github.rcosteira79.depgraph.analysis
@@ -723,10 +723,10 @@ data class BytecodeAnalysisResult(
     val classReferences: Map<String, Set<String>>,
 )
 
-class BytecodeClassAnalyser(
+class BytecodeClassAnalyzer(
     private val moduleId: String,
 ) {
-    fun analyse(classDirectories: List<File>): BytecodeAnalysisResult {
+    fun analyze(classDirectories: List<File>): BytecodeAnalysisResult {
         val discoveredClasses: MutableList<DiscoveredClass> = mutableListOf()
         val classReferences: MutableMap<String, MutableSet<String>> = mutableMapOf()
 
@@ -736,7 +736,7 @@ class BytecodeClassAnalyser(
                 dir.walkTopDown()
                     .filter { it.isFile && it.extension == "class" }
                     .forEach { classFile ->
-                        analyseClassFile(classFile, dir, discoveredClasses, classReferences)
+                        analyzeClassFile(classFile, dir, discoveredClasses, classReferences)
                     }
             }
 
@@ -747,7 +747,7 @@ class BytecodeClassAnalyser(
         )
     }
 
-    private fun analyseClassFile(
+    private fun analyzeClassFile(
         classFile: File,
         rootDirectory: File,
         discoveredClasses: MutableList<DiscoveredClass>,
@@ -872,16 +872,16 @@ private class ReferenceCollector(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd gradle-plugin && ./gradlew test --tests '*BytecodeClassAnalyserTest*' -q`
+Run: `cd gradle-plugin && ./gradlew test --tests '*BytecodeClassAnalyzerTest*' -q`
 
 Expected: all 12 tests PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyser.kt \
-  gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyserTest.kt
-git commit -m "Add BytecodeClassAnalyser with ASM-based class reference extraction"
+git add gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzer.kt \
+  gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/BytecodeClassAnalyzerTest.kt
+git commit -m "Add BytecodeClassAnalyzer with ASM-based class reference extraction"
 ```
 
 ---
@@ -1119,7 +1119,7 @@ class ClassAnalysisOrchestratorTest {
     }
 
     @Test
-    fun `ignores references to classes not in any analysed module`() {
+    fun `ignores references to classes not in any analyzed module`() {
         // Given: :app references a third-party class not in any module
         val inputAppResult = BytecodeAnalysisResult(
             moduleId = ":app",
@@ -1279,10 +1279,10 @@ Replace the contents of `gradle-plugin/src/main/kotlin/io/github/rcosteira79/dep
 ```kotlin
 package io.github.rcosteira79.depgraph
 
-import io.github.rcosteira79.depgraph.analysis.BytecodeClassAnalyser
+import io.github.rcosteira79.depgraph.analysis.BytecodeClassAnalyzer
 import io.github.rcosteira79.depgraph.analysis.BytecodeAnalysisResult
 import io.github.rcosteira79.depgraph.analysis.ClassAnalysisOrchestrator
-import io.github.rcosteira79.depgraph.analysis.ModuleAnalyser
+import io.github.rcosteira79.depgraph.analysis.ModuleAnalyzer
 import io.github.rcosteira79.depgraph.model.ModuleClassData
 import io.github.rcosteira79.depgraph.report.HtmlReportGenerator
 import io.github.rcosteira79.depgraph.serialisation.GraphSerializer
@@ -1307,7 +1307,7 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
     @TaskAction
     fun generate() {
         val outputDirFile: File = outputDir.get().asFile
-        val graph = ModuleAnalyser.analyse(project.rootProject)
+        val graph = ModuleAnalyzer.analyze(project.rootProject)
 
         val classData: Map<String, ModuleClassData>? = if (modulesOnly.get()) {
             null
@@ -1336,8 +1336,8 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
 
         val analysisResults: List<BytecodeAnalysisResult> = candidates.map { subproject ->
             val classDirs: List<File> = resolveClassDirectories(subproject, variant)
-            val analyser = BytecodeClassAnalyser(moduleId = subproject.path)
-            analyser.analyse(classDirs)
+            val analyzer = BytecodeClassAnalyzer(moduleId = subproject.path)
+            analyzer.analyze(classDirs)
         }
 
         val moduleEdges: Map<String, Set<String>> = candidates.associate { subproject ->

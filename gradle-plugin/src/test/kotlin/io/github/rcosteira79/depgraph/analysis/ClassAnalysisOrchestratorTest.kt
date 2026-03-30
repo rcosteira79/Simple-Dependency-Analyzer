@@ -234,7 +234,7 @@ class ClassAnalysisOrchestratorTest {
     }
 
     @Test
-    fun `ignores references to classes not in any analysed module`() {
+    fun `ignores references to classes not in any analyzed module`() {
         val inputAppResult =
             BytecodeAnalysisResult(
                 moduleId = ":app",

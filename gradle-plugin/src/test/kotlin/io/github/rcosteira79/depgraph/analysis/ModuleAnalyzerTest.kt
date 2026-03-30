@@ -6,14 +6,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class ModuleAnalyserTest {
+class ModuleAnalyzerTest {
     @Test
-    fun `analyses single-module project with no edges`() {
+    fun `analyzes single-module project with no edges`() {
         val inputRootProject = ProjectBuilder.builder().withName("root").build()
         // Using java-library instead of com.android.application because AGP is not on the test classpath in ProjectBuilder tests
         inputRootProject.pluginManager.apply("java-library")
 
-        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
+        val actualGraph = ModuleAnalyzer.analyze(inputRootProject)
 
         assertEquals(1, actualGraph.modules.size)
         assertEquals(":", actualGraph.modules.first().id)
@@ -42,7 +42,7 @@ class ModuleAnalyserTest {
         inputAppProject.configurations.maybeCreate("implementation")
         inputAppProject.dependencies.add("implementation", inputCoreProject)
 
-        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
+        val actualGraph = ModuleAnalyzer.analyze(inputRootProject)
 
         val actualEdge = actualGraph.edges.single()
         assertEquals(":app", actualEdge.from)
@@ -59,7 +59,7 @@ class ModuleAnalyserTest {
             .withParent(inputRootProject)
             .build()
 
-        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
+        val actualGraph = ModuleAnalyzer.analyze(inputRootProject)
 
         assertTrue(actualGraph.modules.none { it.id == ":buildSrc" })
     }
@@ -78,7 +78,7 @@ class ModuleAnalyserTest {
         inputModule.extensions.create("dependencyGraph", DependencyGraphExtension::class.java)
         inputModule.extensions.getByType(DependencyGraphExtension::class.java).moduleType = "feature"
 
-        val actualGraph = ModuleAnalyser.analyse(inputRootProject)
+        val actualGraph = ModuleAnalyzer.analyze(inputRootProject)
 
         val actualModule = actualGraph.modules.find { it.id == ":weird-module" }!!
         assertEquals("feature", actualModule.type)

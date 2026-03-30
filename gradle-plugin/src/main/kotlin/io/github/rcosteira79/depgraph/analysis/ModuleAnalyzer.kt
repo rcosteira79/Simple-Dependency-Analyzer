@@ -10,8 +10,8 @@ import org.gradle.api.Project
 private val DEPENDENCY_CONFIGURATIONS: Set<String> = setOf("implementation", "api", "compileOnly")
 private val EXCLUDED_PROJECTS: Set<String> = setOf("buildSrc")
 
-object ModuleAnalyser {
-    fun analyse(rootProject: Project): GraphModel {
+object ModuleAnalyzer {
+    fun analyze(rootProject: Project): GraphModel {
         // For multi-module projects, exclude the root (it's just a container).
         // For single-module projects, the root IS the module — include it.
         val candidates: Collection<Project> =

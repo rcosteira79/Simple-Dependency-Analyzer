@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and publish a Gradle plugin that analyses a multi-module Android/Kotlin project and outputs `graph.json` (structured module dependency data) and `index.html` (a self-contained interactive visualisation).
+**Goal:** Build and publish a Gradle plugin that analyzes a multi-module Android/Kotlin project and outputs `graph.json` (structured module dependency data) and `index.html` (a self-contained interactive visualisation).
 
 **Architecture:** A single Gradle plugin applies to the root project, registers a `generateDependencyGraph` task, walks `project.subprojects` to collect module types and dependency edges, serialises the result to `build/dep-graph/graph.json`, and writes a standalone `index.html` with all visualisation logic and data bundled inline. The analysis, serialisation, and report generation are separate classes with no knowledge of each other.
 
@@ -23,7 +23,7 @@ gradle-plugin/
 │   │   └── kotlin/io/github/rcosteira79/depgraph/
 │   │       ├── DependencyGraphPlugin.kt      # Plugin entry point — registers task and DSL extension
 │   │       ├── DependencyGraphExtension.kt   # DSL: dependencyGraph { moduleType = "..." }
-│   │       ├── GenerateDependencyGraphTask.kt# Gradle task — wires analyser, serialiser, report gen
+│   │       ├── GenerateDependencyGraphTask.kt# Gradle task — wires analyzer, serialiser, report gen
 │   │       ├── model/
 │   │       │   ├── Module.kt                 # @Serializable data class: id, type, path
 │   │       │   ├── ModuleType.kt             # Enum: APP, FEATURE, CORE, DATA, UNKNOWN
@@ -31,7 +31,7 @@ gradle-plugin/
 │   │       │   └── GraphModel.kt             # @Serializable data class: schemaVersion, modules, edges
 │   │       ├── analysis/
 │   │       │   ├── ModuleTypeInferrer.kt     # Pure function: (pluginIds, path, name) -> ModuleType
-│   │       │   └── ModuleAnalyser.kt         # Walks project.subprojects -> GraphModel
+│   │       │   └── ModuleAnalyzer.kt         # Walks project.subprojects -> GraphModel
 │   │       ├── serialisation/
 │   │       │   └── GraphSerializer.kt        # Writes GraphModel to graph.json
 │   │       └── report/
@@ -41,7 +41,7 @@ gradle-plugin/
 │       └── kotlin/io/github/rcosteira79/depgraph/
 │           ├── analysis/
 │           │   ├── ModuleTypeInferrerTest.kt
-│           │   └── ModuleAnalyserTest.kt
+│           │   └── ModuleAnalyzerTest.kt
 │           ├── serialisation/
 │           │   └── GraphSerializerTest.kt
 │           ├── report/
@@ -385,18 +385,18 @@ git commit -m "feat: implement module type inferrer"
 
 ---
 
-## Task 4: Module analyser
+## Task 4: Module analyzer
 
 **Files:**
-- Create: `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/ModuleAnalyser.kt`
-- Create: `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/ModuleAnalyserTest.kt`
+- Create: `gradle-plugin/src/main/kotlin/io/github/rcosteira79/depgraph/analysis/ModuleAnalyzer.kt`
+- Create: `gradle-plugin/src/test/kotlin/io/github/rcosteira79/depgraph/analysis/ModuleAnalyzerTest.kt`
 
-The analyser uses Gradle's `ProjectBuilder` API in tests — no mocking needed.
+The analyzer uses Gradle's `ProjectBuilder` API in tests — no mocking needed.
 
 - [ ] **Step 1: Write the failing test**
 
 ```kotlin
-// ModuleAnalyserTest.kt
+// ModuleAnalyzerTest.kt
 package io.github.rcosteira79.depgraph.analysis
 
 import io.github.rcosteira79.depgraph.model.ModuleType
@@ -405,14 +405,14 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
-class ModuleAnalyserTest {
+class ModuleAnalyzerTest {
 
     @Test
-    fun `analyses single-module project with no edges`() {
+    fun `analyzes single-module project with no edges`() {
         val rootProject = ProjectBuilder.builder().withName("root").build()
         rootProject.pluginManager.apply("com.android.application")
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyzer.analyze(rootProject)
 
         assertEquals(1, actualGraph.modules.size)
         // Root project path in ProjectBuilder is always ":"
@@ -437,7 +437,7 @@ class ModuleAnalyserTest {
         appProject.configurations.create("implementation")
         appProject.dependencies.add("implementation", coreProject)
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyzer.analyze(rootProject)
 
         val actualEdge = actualGraph.edges.single()
         assertEquals(":app", actualEdge.from)
@@ -450,7 +450,7 @@ class ModuleAnalyserTest {
         val rootProject = ProjectBuilder.builder().withName("root").build()
         ProjectBuilder.builder().withName("buildSrc").withParent(rootProject).build()
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyzer.analyze(rootProject)
 
         assertTrue(actualGraph.modules.none { it.id == ":buildSrc" })
     }
@@ -467,7 +467,7 @@ class ModuleAnalyserTest {
         module.extensions.create("dependencyGraph", DependencyGraphExtension::class.java)
         module.extensions.getByType(DependencyGraphExtension::class.java).moduleType = "feature"
 
-        val actualGraph = ModuleAnalyser.analyse(rootProject)
+        val actualGraph = ModuleAnalyzer.analyze(rootProject)
 
         val actualModule = actualGraph.modules.find { it.id == ":weird-module" }!!
         assertEquals("feature", actualModule.type)
@@ -478,11 +478,11 @@ class ModuleAnalyserTest {
 - [ ] **Step 2: Run tests to confirm they fail**
 
 ```bash
-./gradlew test --tests "*.ModuleAnalyserTest"
+./gradlew test --tests "*.ModuleAnalyzerTest"
 ```
-Expected: FAIL — `ModuleAnalyser` does not exist yet
+Expected: FAIL — `ModuleAnalyzer` does not exist yet
 
-- [ ] **Step 3: Create `DependencyGraphExtension.kt`** (needed by the analyser and DSL task)
+- [ ] **Step 3: Create `DependencyGraphExtension.kt`** (needed by the analyzer and DSL task)
 
 ```kotlin
 // DependencyGraphExtension.kt
@@ -496,7 +496,7 @@ open class DependencyGraphExtension {
 }
 ```
 
-- [ ] **Step 4: Implement `ModuleAnalyser.kt`**
+- [ ] **Step 4: Implement `ModuleAnalyzer.kt`**
 
 ```kotlin
 package io.github.rcosteira79.depgraph.analysis
@@ -510,9 +510,9 @@ import org.gradle.api.Project
 private val DEPENDENCY_CONFIGURATIONS = setOf("implementation", "api", "compileOnly")
 private val EXCLUDED_PROJECTS = setOf("buildSrc")
 
-object ModuleAnalyser {
+object ModuleAnalyzer {
 
-    fun analyse(rootProject: Project): GraphModel {
+    fun analyze(rootProject: Project): GraphModel {
         val allProjects = rootProject.allprojects
             .filter { it.name !in EXCLUDED_PROJECTS }
 
@@ -557,7 +557,7 @@ object ModuleAnalyser {
 - [ ] **Step 5: Run tests to confirm they pass**
 
 ```bash
-./gradlew test --tests "*.ModuleAnalyserTest"
+./gradlew test --tests "*.ModuleAnalyzerTest"
 ```
 Expected: 4 tests PASS
 
@@ -565,7 +565,7 @@ Expected: 4 tests PASS
 
 ```bash
 git add gradle-plugin/src/
-git commit -m "feat: implement module analyser"
+git commit -m "feat: implement module analyzer"
 ```
 
 ---
@@ -1122,7 +1122,7 @@ git commit -m "feat: implement html report generator"
 ```kotlin
 package io.github.rcosteira79.depgraph
 
-import io.github.rcosteira79.depgraph.analysis.ModuleAnalyser
+import io.github.rcosteira79.depgraph.analysis.ModuleAnalyzer
 import io.github.rcosteira79.depgraph.report.HtmlReportGenerator
 import io.github.rcosteira79.depgraph.serialisation.GraphSerializer
 import org.gradle.api.DefaultTask
@@ -1138,7 +1138,7 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
 
     @TaskAction
     fun generate() {
-        val graph = ModuleAnalyser.analyse(project.rootProject)
+        val graph = ModuleAnalyzer.analyze(project.rootProject)
         GraphSerializer.serialize(graph, File(outputDir, "graph.json"))
         HtmlReportGenerator.generate(graph, File(outputDir, "index.html"))
         logger.lifecycle("Dependency graph written to ${outputDir.absolutePath}")
@@ -1317,7 +1317,7 @@ git commit -m "test: add integration test for generateDependencyGraph task"
 ```bash
 ./gradlew test
 ```
-Expected: ALL PASS — ModuleTypeInferrerTest (11), ModuleAnalyserTest (4), GraphSerializerTest (3), HtmlReportGeneratorTest (4), GenerateDependencyGraphTaskTest (2)
+Expected: ALL PASS — ModuleTypeInferrerTest (11), ModuleAnalyzerTest (4), GraphSerializerTest (3), HtmlReportGeneratorTest (4), GenerateDependencyGraphTaskTest (2)
 
 - [ ] **Step 2: Manually verify the standalone HTML**
 

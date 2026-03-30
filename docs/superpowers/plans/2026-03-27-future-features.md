@@ -10,10 +10,10 @@
 
 **Effort:** Low | **Value:** High
 
-Add `testImplementation`, `androidTestImplementation`, `testCompileOnly` to the scanned configurations in `ModuleAnalyser`. The `Edge.configuration` field already stores the config name.
+Add `testImplementation`, `androidTestImplementation`, `testCompileOnly` to the scanned configurations in `ModuleAnalyzer`. The `Edge.configuration` field already stores the config name.
 
 **Backend:**
-- `ModuleAnalyser.kt`: add test configs to `DEPENDENCY_CONFIGURATIONS`
+- `ModuleAnalyzer.kt`: add test configs to `DEPENDENCY_CONFIGURATIONS`
 - No model changes needed — `Edge.configuration` already carries the info
 
 **JS:**

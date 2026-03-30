@@ -22,16 +22,16 @@ Declares a tool window ("Dependency Graph") and registers a startup activity tha
 
 ### 2. Analysis layer (Kotlin)
 
-**`ModuleGraphAnalyser`**
+**`ModuleGraphAnalyzer`**
 - Uses `ModuleManager`, `ModuleRootManager`, and `OrderEntry` IntelliJ APIs to build the module dependency graph.
 - Detects module type via `FacetManager` (presence of `AndroidFacet`) and the same naming heuristics as the existing Gradle plugin's `ModuleTypeInferrer` (`feature-`, `:data:`, etc.).
 - Maps dependency scopes to `implementation`/`api`/`compileOnly` equivalents.
 - Module IDs use the Gradle path convention (`:module:path`), derived from the module's path relative to the project root, to remain compatible with the existing `GraphModel` contract. The `buildSrc` module is excluded. Composite builds are out of scope for v1.
 - Produces the same `GraphModel(modules, edges)` shape the existing `graph-template.js` already understands — no JS changes needed for the module view.
 - Runs via `ReadAction.nonBlocking().submit(AppExecutorUtil.getAppExecutorService())` so it never blocks the UI thread. The tool window shows a loading indicator while analysis is in progress.
-- Re-runs on `ModuleRootManager.PROJECT_ROOTS_CHANGED` events (module added/removed, dependency added/removed). The graph is refreshed in place; any open class-view tabs are marked stale with a banner offering to re-analyse.
+- Re-runs on `ModuleRootManager.PROJECT_ROOTS_CHANGED` events (module added/removed, dependency added/removed). The graph is refreshed in place; any open class-view tabs are marked stale with a banner offering to re-analyze.
 
-**`ClassDependencyAnalyser`**
+**`ClassDependencyAnalyzer`**
 - Given a module, uses PSI (`JavaPsiFacade`, `KtClassOrObject`, `PsiReference`, `ModuleUtilCore`) to collect all classes and detect cross-module references.
 - **Resolution strategy:**
   - Inner classes: resolved to their outermost containing class for graph purposes (edge recorded to the top-level class).
@@ -53,7 +53,7 @@ Declares a tool window ("Dependency Graph") and registers a startup activity tha
 
 **Expand request/response protocol (JS ↔ Kotlin bridge):**
 - **Request** (JS → Kotlin): `{ "action": "expandModule", "moduleId": ":some:module", "inspectedModuleId": ":other:module" }`
-- Kotlin runs `ClassDependencyAnalyser` on the target module, scoped to only the classes referenced by the inspected module's classes.
+- Kotlin runs `ClassDependencyAnalyzer` on the target module, scoped to only the classes referenced by the inspected module's classes.
 - **Response** (Kotlin → JS): `{ "action": "expandedModule", "moduleId": ":some:module", "classes": [...], "internalEdges": [...], "highlightedClassIds": ["com.example.Foo"] }`
 - The JS merges this into the existing graph, animates the expansion, and highlights `highlightedClassIds`.
 
@@ -61,7 +61,7 @@ Declares a tool window ("Dependency Graph") and registers a startup activity tha
 
 Two self-contained HTML templates:
 
-- **`module-view.html`**: uses the existing `graph-template.js` verbatim. The IntelliJ-analysed `GraphModel` JSON is injected as `window.__GRAPH_DATA__`, identical to what the Gradle task does. All existing features are supported: depth slider, transitive toggle, flat/deep layout modes, explorer panel, subgraph animation, edge detail pane, auto-select first app module.
+- **`module-view.html`**: uses the existing `graph-template.js` verbatim. The IntelliJ-analyzed `GraphModel` JSON is injected as `window.__GRAPH_DATA__`, identical to what the Gradle task does. All existing features are supported: depth slider, transitive toggle, flat/deep layout modes, explorer panel, subgraph animation, edge detail pane, auto-select first app module.
 - **`class-view.html`**: new template using the same D3/dagre stack. Renders the class graph with module boundary boxes.
 
 One `JBCefBrowser` instance per tab. A `JBCefJSQuery` bridge per browser handles messages from JS → Kotlin (context menu actions, expand/collapse requests, navigation). JBCefJSQuery message handlers are unit-tested independently of JCEF (see Testing section).
@@ -82,7 +82,7 @@ All tabs coexist in the same tab control. Switching tabs does not trigger re-ana
 
 ```
 Project opened
-  → ModuleGraphAnalyser (ReadAction.nonBlocking, background)
+  → ModuleGraphAnalyzer (ReadAction.nonBlocking, background)
   → loading indicator shown in Module Graph tab
   → GraphModel JSON injected into module-view.html
   → JCEF renders module graph
@@ -90,13 +90,13 @@ Project opened
 User right-clicks module node → "View Classes"
   → JS posts { action: "viewClasses", moduleId: ":some:module" } via JBCefJSQuery
   → New "Classes: :some:module" tab created with loading indicator
-  → ClassDependencyAnalyser runs (ReadAction.nonBlocking, background)
+  → ClassDependencyAnalyzer runs (ReadAction.nonBlocking, background)
   → ClassGraphData JSON injected into class-view.html
   → JCEF renders class graph
 
 User clicks external module node (collapsed)
   → JS posts { action: "expandModule", moduleId: "...", inspectedModuleId: "..." }
-  → ClassDependencyAnalyser scoped to referenced classes in target module
+  → ClassDependencyAnalyzer scoped to referenced classes in target module
   → Response { action: "expandedModule", ... } posted back to JS
   → Graph animates expansion, target classes highlighted
 
@@ -145,9 +145,9 @@ Right-clicking a module node in the module view adds:
 |---|---|
 | No source roots / empty module | Class-view tab shows empty state: "No classes found in `:module-name`" |
 | Unresolvable PSI references | Silently skipped per reference; class is still shown with its resolvable edges |
-| Analysis exception / timeout | Affected tab shows error state with message and "Retry" button; retry re-runs the analyser for that tab only |
+| Analysis exception / timeout | Affected tab shows error state with message and "Retry" button; retry re-runs the analyzer for that tab only |
 | JCEF unavailable | Generate HTML via `HtmlReportGenerator` and open in system browser |
-| Module roots change while class-view tab is open | Tab shows stale-data banner: "Module structure changed — click to re-analyse" |
+| Module roots change while class-view tab is open | Tab shows stale-data banner: "Module structure changed — click to re-analyze" |
 
 ---
 
@@ -155,11 +155,11 @@ Right-clicking a module node in the module view adds:
 
 | Component | Approach |
 |---|---|
-| `ModuleGraphAnalyser` | Unit tests with `MockProject` + mock `ModuleManager`; verify nodes, edges, type inference |
-| `ClassDependencyAnalyser` (Java) | `LightJavaCodeInsightFixtureTestCase` with fixture source files; verify cross-module edges, inner class resolution, generic type resolution |
-| `ClassDependencyAnalyser` (Kotlin) | `KotlinLightCodeInsightFixtureTestCase` with fixture `.kt` source files; same scenarios |
+| `ModuleGraphAnalyzer` | Unit tests with `MockProject` + mock `ModuleManager`; verify nodes, edges, type inference |
+| `ClassDependencyAnalyzer` (Java) | `LightJavaCodeInsightFixtureTestCase` with fixture source files; verify cross-module edges, inner class resolution, generic type resolution |
+| `ClassDependencyAnalyzer` (Kotlin) | `KotlinLightCodeInsightFixtureTestCase` with fixture `.kt` source files; same scenarios |
 | `ModuleTypeInferrer` (reused) | Already covered by existing `ModuleTypeInferrerTest` |
-| `JBCefJSQuery` message handlers | Unit-tested via plain Kotlin tests: given a message string, verify the correct analyser method is called and the correct response JSON is produced — no JCEF instance needed |
+| `JBCefJSQuery` message handlers | Unit-tested via plain Kotlin tests: given a message string, verify the correct analyzer method is called and the correct response JSON is produced — no JCEF instance needed |
 | JCEF rendering end-to-end | Manual testing in Android Studio |
 
 ---

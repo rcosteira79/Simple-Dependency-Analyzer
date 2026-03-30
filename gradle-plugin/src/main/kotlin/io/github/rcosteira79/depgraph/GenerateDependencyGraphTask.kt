@@ -1,12 +1,12 @@
 package io.github.rcosteira79.depgraph
 
 import io.github.rcosteira79.depgraph.analysis.BytecodeAnalysisResult
-import io.github.rcosteira79.depgraph.analysis.BytecodeClassAnalyser
+import io.github.rcosteira79.depgraph.analysis.BytecodeClassAnalyzer
 import io.github.rcosteira79.depgraph.analysis.ClassAnalysisOrchestrator
-import io.github.rcosteira79.depgraph.analysis.ModuleAnalyser
+import io.github.rcosteira79.depgraph.analysis.ModuleAnalyzer
 import io.github.rcosteira79.depgraph.model.ModuleClassData
 import io.github.rcosteira79.depgraph.report.HtmlReportGenerator
-import io.github.rcosteira79.depgraph.serialisation.GraphSerializer
+import io.github.rcosteira79.depgraph.serialization.GraphSerializer
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.Property
@@ -33,7 +33,7 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
     @TaskAction
     fun generate() {
         val outputDirFile: File = outputDir.get().asFile
-        val graph = ModuleAnalyser.analyse(project.rootProject)
+        val graph = ModuleAnalyzer.analyze(project.rootProject)
 
         val classData: Map<String, ModuleClassData>? =
             if (modulesOnly.get()) {
@@ -47,7 +47,7 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
         GraphSerializer.serialize(fullGraph, File(outputDirFile, GRAPH_JSON_FILENAME))
         HtmlReportGenerator.generate(fullGraph, File(outputDirFile, HTML_REPORT_FILENAME))
         val reportFile = File(outputDirFile, HTML_REPORT_FILENAME)
-        logger.lifecycle("\n◈ Simple Dependency Analyser report: file://${reportFile.absolutePath}\n")
+        logger.lifecycle("\n◈ Simple Dependency Analyzer report: file://${reportFile.absolutePath}\n")
     }
 
     private fun runClassAnalysis(): Map<String, ModuleClassData> {
@@ -67,8 +67,8 @@ abstract class GenerateDependencyGraphTask : DefaultTask() {
         val analysisResults: List<BytecodeAnalysisResult> =
             candidates.map { subproject ->
                 val classDirs: List<File> = resolveClassDirectories(subproject, variant)
-                val analyser = BytecodeClassAnalyser(moduleId = subproject.path)
-                analyser.analyse(classDirs)
+                val analyzer = BytecodeClassAnalyzer(moduleId = subproject.path)
+                analyzer.analyze(classDirs)
             }
 
         return ClassAnalysisOrchestrator.buildClassData(analysisResults)

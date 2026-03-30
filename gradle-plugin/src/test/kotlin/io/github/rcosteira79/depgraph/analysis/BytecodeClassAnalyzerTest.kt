@@ -7,7 +7,7 @@ import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import javax.tools.ToolProvider
 
-class BytecodeClassAnalyserTest {
+class BytecodeClassAnalyzerTest {
     @Test
     fun `discovers classes in a directory`(
         @TempDir tempDir: File,
@@ -26,9 +26,9 @@ class BytecodeClassAnalyserTest {
                     public class Bar {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualClassNames: Set<String> = actualResult.discoveredClasses.map { it.qualifiedName }.toSet()
         assertEquals(setOf("com.example.Foo", "com.example.Bar"), actualClassNames)
@@ -52,9 +52,9 @@ class BytecodeClassAnalyserTest {
                     public class Foo { private Bar bar; }
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualFooRefs: Set<String> = actualResult.classReferences["com.example.Foo"] ?: emptySet()
         assertTrue(actualFooRefs.contains("com.example.Bar"))
@@ -78,9 +78,9 @@ class BytecodeClassAnalyserTest {
                     public class Service { public Result process() { return null; } }
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Service"] ?: emptySet()
         assertTrue(actualRefs.contains("com.example.Result"))
@@ -104,9 +104,9 @@ class BytecodeClassAnalyserTest {
                     public class Child extends Base {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Child"] ?: emptySet()
         assertTrue(actualRefs.contains("com.example.Base"))
@@ -130,9 +130,9 @@ class BytecodeClassAnalyserTest {
                     public class Button implements Clickable {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Button"] ?: emptySet()
         assertTrue(actualRefs.contains("com.example.Clickable"))
@@ -156,9 +156,9 @@ class BytecodeClassAnalyserTest {
                     public class Foo { public Bar create() { return new Bar(); } }
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Foo"] ?: emptySet()
         assertTrue(actualRefs.contains("com.example.Bar"))
@@ -177,9 +177,9 @@ class BytecodeClassAnalyserTest {
                     public class Hilt_MyActivity {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         assertTrue(actualResult.discoveredClasses.none { it.qualifiedName == "com.example.Hilt_MyActivity" })
     }
@@ -197,9 +197,9 @@ class BytecodeClassAnalyserTest {
                     public class Standalone {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Standalone"] ?: emptySet()
         assertTrue(!actualRefs.contains("com.example.Standalone"))
@@ -219,9 +219,9 @@ class BytecodeClassAnalyserTest {
                     public class Holder { private List<String> items; }
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(classesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(classesDir))
 
         val actualRefs: Set<String> = actualResult.classReferences["com.example.Holder"] ?: emptySet()
         assertTrue(actualRefs.none { it.startsWith("java.") })
@@ -249,9 +249,9 @@ class BytecodeClassAnalyserTest {
                     public class KotlinClass {}
                     """.trimIndent(),
             )
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(javaClassesDir, kotlinClassesDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(javaClassesDir, kotlinClassesDir))
 
         val actualClassNames: Set<String> = actualResult.discoveredClasses.map { it.qualifiedName }.toSet()
         assertEquals(setOf("com.example.JavaClass", "com.example.KotlinClass"), actualClassNames)
@@ -262,9 +262,9 @@ class BytecodeClassAnalyserTest {
         @TempDir tempDir: File,
     ) {
         val emptyDir: File = File(tempDir, "empty").also { it.mkdirs() }
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(emptyDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(emptyDir))
 
         assertTrue(actualResult.discoveredClasses.isEmpty())
         assertTrue(actualResult.classReferences.isEmpty())
@@ -275,9 +275,9 @@ class BytecodeClassAnalyserTest {
         @TempDir tempDir: File,
     ) {
         val missingDir = File(tempDir, "does-not-exist")
-        val analyser = BytecodeClassAnalyser(moduleId = ":mymodule")
+        val analyzer = BytecodeClassAnalyzer(moduleId = ":mymodule")
 
-        val actualResult: BytecodeAnalysisResult = analyser.analyse(listOf(missingDir))
+        val actualResult: BytecodeAnalysisResult = analyzer.analyze(listOf(missingDir))
 
         assertTrue(actualResult.discoveredClasses.isEmpty())
         assertTrue(actualResult.classReferences.isEmpty())

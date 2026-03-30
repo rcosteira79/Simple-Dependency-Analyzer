@@ -26,8 +26,8 @@ All new files live under `android-studio-plugin/`. Base package: `io.github.rcos
 | `src/main/kotlin/.../model/ClassGraphData.kt` | ClassGraphData, ClassNode, ClassEdge, ExternalDep |
 | `src/main/kotlin/.../analysis/ModuleTypeInferrer.kt` | Copy of Gradle plugin's ModuleTypeInferrer (package only changed) |
 | `src/main/kotlin/.../analysis/ModuleIdConverter.kt` | IntelliJ Module → Gradle `:path` string |
-| `src/main/kotlin/.../analysis/ModuleGraphAnalyser.kt` | ModuleManager → GraphModel |
-| `src/main/kotlin/.../analysis/ClassDependencyAnalyser.kt` | PSI → ClassGraphData |
+| `src/main/kotlin/.../analysis/ModuleGraphAnalyzer.kt` | ModuleManager → GraphModel |
+| `src/main/kotlin/.../analysis/ClassDependencyAnalyzer.kt` | PSI → ClassGraphData |
 | `src/main/kotlin/.../bridge/MessageParser.kt` | JSON field parsing helpers (no JCEF dependency) |
 | `src/main/kotlin/.../bridge/ModuleViewBridge.kt` | Handles messages from module-view JS |
 | `src/main/kotlin/.../bridge/ClassViewBridge.kt` | Handles messages from class-view JS |
@@ -37,8 +37,8 @@ All new files live under `android-studio-plugin/`. Base package: `io.github.rcos
 | `src/test/kotlin/.../model/ClassGraphDataTest.kt` | Serialization roundtrip tests |
 | `src/test/kotlin/.../analysis/ModuleTypeInferrerTest.kt` | Copied from gradle-plugin |
 | `src/test/kotlin/.../analysis/ModuleIdConverterTest.kt` | Path conversion tests |
-| `src/test/kotlin/.../analysis/ModuleGraphAnalyserTest.kt` | BasePlatformTestCase with mock modules |
-| `src/test/kotlin/.../analysis/ClassDependencyAnalyserTest.kt` | LightJavaCodeInsightFixtureTestCase |
+| `src/test/kotlin/.../analysis/ModuleGraphAnalyzerTest.kt` | BasePlatformTestCase with mock modules |
+| `src/test/kotlin/.../analysis/ClassDependencyAnalyzerTest.kt` | LightJavaCodeInsightFixtureTestCase |
 | `src/test/kotlin/.../bridge/ModuleViewBridgeTest.kt` | Message handler unit tests |
 | `src/test/kotlin/.../bridge/ClassViewBridgeTest.kt` | Message handler unit tests |
 
@@ -629,17 +629,17 @@ git commit -am "feat: add bridge message handlers"
 
 ---
 
-## Task 5: ModuleGraphAnalyser
+## Task 5: ModuleGraphAnalyzer
 
 **Files:**
-- Create: `src/main/kotlin/.../analysis/ModuleGraphAnalyser.kt`
-- Create: `src/test/kotlin/.../analysis/ModuleGraphAnalyserTest.kt`
+- Create: `src/main/kotlin/.../analysis/ModuleGraphAnalyzer.kt`
+- Create: `src/test/kotlin/.../analysis/ModuleGraphAnalyzerTest.kt`
 
 Note: IntelliJ test fixtures extend JUnit 3 `TestCase`. Use `fun testXxx()` naming and JUnit 3 `assertEquals`. Do NOT use JUnit 5 `@Test` annotations in `BasePlatformTestCase` subclasses.
 
 - [ ] **Step 1: Write failing test**
 
-Create `src/test/kotlin/io/github/rcosteira79/depgraph/plugin/analysis/ModuleGraphAnalyserTest.kt`:
+Create `src/test/kotlin/io/github/rcosteira79/depgraph/plugin/analysis/ModuleGraphAnalyzerTest.kt`:
 
 ```kotlin
 package io.github.rcosteira79.depgraph.plugin.analysis
@@ -647,22 +647,22 @@ package io.github.rcosteira79.depgraph.plugin.analysis
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import io.github.rcosteira79.depgraph.plugin.model.GraphModel
 
-class ModuleGraphAnalyserTest : BasePlatformTestCase() {
-    fun `test analyse returns at least one module for light project`() {
+class ModuleGraphAnalyzerTest : BasePlatformTestCase() {
+    fun `test analyze returns at least one module for light project`() {
         // Given: the default BasePlatformTestCase light project (has one module)
-        val analyser = ModuleGraphAnalyser(project)
+        val analyzer = ModuleGraphAnalyzer(project)
 
         // When:
-        val actualModel: GraphModel = analyser.analyse()
+        val actualModel: GraphModel = analyzer.analyze()
 
         // Then:
         assertTrue("Expected at least one module", actualModel.modules.isNotEmpty())
     }
 
     fun `test modules have non-empty ids`() {
-        val analyser = ModuleGraphAnalyser(project)
+        val analyzer = ModuleGraphAnalyzer(project)
 
-        val actualModel: GraphModel = analyser.analyse()
+        val actualModel: GraphModel = analyzer.analyze()
 
         actualModel.modules.forEach { module ->
             assertTrue("Module id should not be blank", module.id.isNotBlank())
@@ -675,10 +675,10 @@ class ModuleGraphAnalyserTest : BasePlatformTestCase() {
 - [ ] **Step 2: Run to verify failure**
 
 ```bash
-./gradlew test --tests "*.analysis.ModuleGraphAnalyserTest"
+./gradlew test --tests "*.analysis.ModuleGraphAnalyzerTest"
 ```
 
-- [ ] **Step 3: Create `ModuleGraphAnalyser.kt`**
+- [ ] **Step 3: Create `ModuleGraphAnalyzer.kt`**
 
 ```kotlin
 package io.github.rcosteira79.depgraph.plugin.analysis
@@ -700,8 +700,8 @@ private val SCOPE_TO_CONFIGURATION: Map<DependencyScope, String> = mapOf(
     DependencyScope.TEST to "implementation",
 )
 
-class ModuleGraphAnalyser(private val project: Project) {
-    fun analyse(): GraphModel {
+class ModuleGraphAnalyzer(private val project: Project) {
+    fun analyze(): GraphModel {
         val projectBasePath: String = project.basePath ?: ""
         val allModules: List<Module> = ModuleManager.getInstance(project).modules
             .filter { module -> !ModuleIdConverter.isExcluded(module.name) }
@@ -794,7 +794,7 @@ class ModuleGraphAnalyser(private val project: Project) {
 - [ ] **Step 4: Run tests**
 
 ```bash
-./gradlew test --tests "*.analysis.ModuleGraphAnalyserTest"
+./gradlew test --tests "*.analysis.ModuleGraphAnalyzerTest"
 ```
 
 Expected: PASS.
@@ -802,22 +802,22 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -am "feat: add ModuleGraphAnalyser"
+git commit -am "feat: add ModuleGraphAnalyzer"
 ```
 
 ---
 
-## Task 6: ClassDependencyAnalyser
+## Task 6: ClassDependencyAnalyzer
 
 **Files:**
-- Create: `src/main/kotlin/.../analysis/ClassDependencyAnalyser.kt`
-- Create: `src/test/kotlin/.../analysis/ClassDependencyAnalyserTest.kt`
+- Create: `src/main/kotlin/.../analysis/ClassDependencyAnalyzer.kt`
+- Create: `src/test/kotlin/.../analysis/ClassDependencyAnalyzerTest.kt`
 
 Note: Uses `LightJavaCodeInsightFixtureTestCase` (JUnit 3 style, `fun testXxx()`).
 
 - [ ] **Step 1: Write failing tests**
 
-Create `src/test/kotlin/io/github/rcosteira79/depgraph/plugin/analysis/ClassDependencyAnalyserTest.kt`:
+Create `src/test/kotlin/io/github/rcosteira79/depgraph/plugin/analysis/ClassDependencyAnalyzerTest.kt`:
 
 ```kotlin
 package io.github.rcosteira79.depgraph.plugin.analysis
@@ -825,7 +825,7 @@ package io.github.rcosteira79.depgraph.plugin.analysis
 import com.intellij.testFramework.fixtures.LightJavaCodeInsightFixtureTestCase
 import io.github.rcosteira79.depgraph.plugin.model.ClassGraphData
 
-class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
+class ClassDependencyAnalyzerTest : LightJavaCodeInsightFixtureTestCase() {
     fun `test detects cross-module dependency from import`() {
         // Given:
         myFixture.addFileToProject(
@@ -837,11 +837,11 @@ class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
             """.trimIndent(),
         )
         // Button lives in a separate physical file simulating another module
-        // For the light test we verify the analyser collects classes and finds refs
+        // For the light test we verify the analyzer collects classes and finds refs
         // The module boundary test requires a multi-module fixture (covered in integration)
-        val analyser = ClassDependencyAnalyser(project)
+        val analyzer = ClassDependencyAnalyzer(project)
 
-        // When: analyse the only module in this light project
+        // When: analyze the only module in this light project
         val allModules = com.intellij.openapi.module.ModuleManager.getInstance(project).modules
         val moduleId = allModules.first().let { m ->
             ModuleIdConverter.toGradlePath(
@@ -849,7 +849,7 @@ class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
                     .removePrefix(project.basePath ?: "").trimStart('/')
             )
         }
-        val actualData: ClassGraphData = analyser.analyse(moduleId)
+        val actualData: ClassGraphData = analyzer.analyze(moduleId)
 
         // Then: LoginFragment is collected
         assertTrue("Expected LoginFragment in classes",
@@ -874,7 +874,7 @@ class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
             """.trimIndent(),
         )
 
-        val analyser = ClassDependencyAnalyser(project)
+        val analyzer = ClassDependencyAnalyzer(project)
         val allModules = com.intellij.openapi.module.ModuleManager.getInstance(project).modules
         val moduleId = allModules.first().let { m ->
             ModuleIdConverter.toGradlePath(
@@ -884,7 +884,7 @@ class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
         }
 
         // When:
-        val actualData: ClassGraphData = analyser.analyse(moduleId)
+        val actualData: ClassGraphData = analyzer.analyze(moduleId)
 
         // Then: Theme.Dark reference records an internal edge to Theme (outer class), not Theme.Dark
         val darkRef = actualData.internalEdges.find { it.from == "com.example.LoginActivity" }
@@ -897,10 +897,10 @@ class ClassDependencyAnalyserTest : LightJavaCodeInsightFixtureTestCase() {
 - [ ] **Step 2: Run to verify failure**
 
 ```bash
-./gradlew test --tests "*.analysis.ClassDependencyAnalyserTest"
+./gradlew test --tests "*.analysis.ClassDependencyAnalyzerTest"
 ```
 
-- [ ] **Step 3: Create `ClassDependencyAnalyser.kt`**
+- [ ] **Step 3: Create `ClassDependencyAnalyzer.kt`**
 
 ```kotlin
 package io.github.rcosteira79.depgraph.plugin.analysis
@@ -924,8 +924,8 @@ import io.github.rcosteira79.depgraph.plugin.model.ClassNode
 import io.github.rcosteira79.depgraph.plugin.model.ExternalDep
 import org.jetbrains.kotlin.idea.KotlinFileType
 
-class ClassDependencyAnalyser(private val project: Project) {
-    fun analyse(moduleId: String): ClassGraphData {
+class ClassDependencyAnalyzer(private val project: Project) {
+    fun analyze(moduleId: String): ClassGraphData {
         val projectBasePath: String = project.basePath ?: ""
         val targetModule: Module? = ModuleManager.getInstance(project).modules.firstOrNull { module ->
             ModuleIdConverter.toGradlePath(
@@ -1035,7 +1035,7 @@ class ClassDependencyAnalyser(private val project: Project) {
 - [ ] **Step 4: Run tests**
 
 ```bash
-./gradlew test --tests "*.analysis.ClassDependencyAnalyserTest"
+./gradlew test --tests "*.analysis.ClassDependencyAnalyzerTest"
 ```
 
 Expected: PASS.
@@ -1043,7 +1043,7 @@ Expected: PASS.
 - [ ] **Step 5: Commit**
 
 ```bash
-git commit -am "feat: add ClassDependencyAnalyser"
+git commit -am "feat: add ClassDependencyAnalyzer"
 ```
 
 ---
@@ -1497,8 +1497,8 @@ import com.intellij.ui.components.JBTabbedPane
 import com.intellij.ui.jcef.JBCefBrowser
 import com.intellij.ui.jcef.JBCefJSQuery
 import com.intellij.util.concurrency.AppExecutorUtil
-import io.github.rcosteira79.depgraph.plugin.analysis.ClassDependencyAnalyser
-import io.github.rcosteira79.depgraph.plugin.analysis.ModuleGraphAnalyser
+import io.github.rcosteira79.depgraph.plugin.analysis.ClassDependencyAnalyzer
+import io.github.rcosteira79.depgraph.plugin.analysis.ModuleGraphAnalyzer
 import io.github.rcosteira79.depgraph.plugin.analysis.ModuleIdConverter
 import io.github.rcosteira79.depgraph.plugin.bridge.ClassViewBridge
 import io.github.rcosteira79.depgraph.plugin.bridge.ModuleViewBridge
@@ -1547,7 +1547,7 @@ class DependencyGraphToolWindow(
 
     private fun runModuleAnalysis() {
         ReadAction.nonBlocking<GraphModel> {
-            ModuleGraphAnalyser(project).analyse()
+            ModuleGraphAnalyzer(project).analyze()
         }.submit(AppExecutorUtil.getAppExecutorService())
             .onSuccess { graphModel -> SwingUtilities.invokeLater { renderModuleView(graphModel) } }
             .onError { SwingUtilities.invokeLater { tabs.setComponentAt(0, errorPanel()) } }
@@ -1594,7 +1594,7 @@ class DependencyGraphToolWindow(
         tabs.selectedIndex = tabIndex
 
         ReadAction.nonBlocking<ClassGraphData> {
-            ClassDependencyAnalyser(project).analyse(moduleId)
+            ClassDependencyAnalyzer(project).analyze(moduleId)
         }.submit(AppExecutorUtil.getAppExecutorService())
             .onSuccess { classData -> SwingUtilities.invokeLater { renderClassView(moduleId, classData, tabIndex) } }
             .onError { SwingUtilities.invokeLater { if (tabIndex < tabs.tabCount) tabs.setComponentAt(tabIndex, errorPanel()) } }
@@ -1674,8 +1674,8 @@ class DependencyGraphToolWindow(
     }
 
     private fun buildExpandedModuleResponse(targetModuleId: String, inspectedModuleId: String): String {
-        val targetData: ClassGraphData = ClassDependencyAnalyser(project).analyse(targetModuleId)
-        val inspectedData: ClassGraphData = ClassDependencyAnalyser(project).analyse(inspectedModuleId)
+        val targetData: ClassGraphData = ClassDependencyAnalyzer(project).analyze(targetModuleId)
+        val inspectedData: ClassGraphData = ClassDependencyAnalyzer(project).analyze(inspectedModuleId)
         val highlightedClassIds: List<String> = inspectedData.externalDeps
             .filter { dep -> dep.targetModuleId == targetModuleId }
             .map { dep -> dep.targetClassId }

@@ -1,3 +1,3 @@
 plugins {
-    id("io.github.rcosteira79.simple-dependency-analyser")
+    id("io.github.rcosteira79.simple-dependency-analyzer")
 }

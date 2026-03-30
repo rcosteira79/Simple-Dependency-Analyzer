@@ -23,10 +23,10 @@ data class BytecodeAnalysisResult(
     val inlineReferences: Map<String, Set<String>>,
 )
 
-class BytecodeClassAnalyser(
+class BytecodeClassAnalyzer(
     private val moduleId: String,
 ) {
-    fun analyse(classDirectories: List<File>): BytecodeAnalysisResult {
+    fun analyze(classDirectories: List<File>): BytecodeAnalysisResult {
         val discoveredClasses: MutableList<DiscoveredClass> = mutableListOf()
         val classReferences: MutableMap<String, MutableSet<String>> = mutableMapOf()
         val inlineReferences: MutableMap<String, MutableSet<String>> = mutableMapOf()
@@ -38,7 +38,7 @@ class BytecodeClassAnalyser(
                     .walkTopDown()
                     .filter { it.isFile && it.extension == "class" }
                     .forEach { classFile ->
-                        analyseClassFile(classFile, discoveredClasses, classReferences, inlineReferences)
+                        analyzeClassFile(classFile, discoveredClasses, classReferences, inlineReferences)
                     }
             }
 
@@ -50,7 +50,7 @@ class BytecodeClassAnalyser(
         )
     }
 
-    private fun analyseClassFile(
+    private fun analyzeClassFile(
         classFile: File,
         discoveredClasses: MutableList<DiscoveredClass>,
         classReferences: MutableMap<String, MutableSet<String>>,

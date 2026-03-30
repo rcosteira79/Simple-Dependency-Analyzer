@@ -1,4 +1,4 @@
-package io.github.rcosteira79.depgraph.serialisation
+package io.github.rcosteira79.depgraph.serialization
 
 import io.github.rcosteira79.depgraph.model.GraphModel
 import io.github.rcosteira79.depgraph.model.Module

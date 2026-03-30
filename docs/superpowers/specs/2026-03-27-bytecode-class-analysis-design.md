@@ -14,7 +14,7 @@ All class data is pre-computed at task time and embedded in the output JSON. The
 
 ### New components
 
-#### `BytecodeClassAnalyser` (analysis/)
+#### `BytecodeClassAnalyzer` (analysis/)
 
 Scans a module's compiled `.class` files using ASM `ClassReader` + `ClassVisitor`.
 
@@ -40,7 +40,7 @@ Coordinates class analysis across all modules.
 2. Resolves compiled class output directories for the configured variant (default `"debug"`):
    - Android modules: `build/intermediates/javac/{variant}/classes/` and `build/tmp/kotlin-classes/{variant}/`
    - JVM modules: `build/classes/kotlin/main/` and `build/classes/java/main/`
-3. Runs `BytecodeClassAnalyser` per module.
+3. Runs `BytecodeClassAnalyzer` per module.
 4. Cross-references results to classify each class reference as internal (within module) or external (cross-module).
 5. Computes boundary classes per module:
    - **Incoming boundary**: classes whose qualified name appears as `targetClassId` in any other module's external deps where `targetModuleId` matches.
@@ -123,7 +123,7 @@ open class DependencyGraphExtension {
 - New `@Input` property `modulesOnly` (Boolean, default `false`). Wired from `-PmodulesOnly` project property.
 - When `modulesOnly` is false:
   - Task `dependsOn` the compile tasks for the configured variant across all modules (e.g. `compileDebugJavaWithJavac`, `compileDebugKotlin` for Android; `compileKotlin`, `compileJava` for JVM).
-  - After `ModuleAnalyser.analyse()`, runs `ClassAnalysisOrchestrator` to produce class data.
+  - After `ModuleAnalyzer.analyze()`, runs `ClassAnalysisOrchestrator` to produce class data.
   - Merges both into a single `GraphModel`.
 - When `modulesOnly` is true:
   - No compile task dependencies.
@@ -206,7 +206,7 @@ The variant name is taken from the root project's `dependencyGraph.variant` exte
 
 ### Unit tests
 
-- `BytecodeClassAnalyserTest`: feed it pre-compiled `.class` files (checked into test resources or compiled from fixture sources), verify it extracts correct class references, filters generated classes, handles edge cases (anonymous classes, lambdas, type annotations).
+- `BytecodeClassAnalyzerTest`: feed it pre-compiled `.class` files (checked into test resources or compiled from fixture sources), verify it extracts correct class references, filters generated classes, handles edge cases (anonymous classes, lambdas, type annotations).
 - `ClassAnalysisOrchestratorTest`: mock module structure, verify boundary class computation and package grouping.
 - `GeneratedClassFilterTest`: verify name-based and directory-based filters individually.
 
