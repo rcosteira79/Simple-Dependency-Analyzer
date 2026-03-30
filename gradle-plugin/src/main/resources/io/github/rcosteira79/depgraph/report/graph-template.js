@@ -8,11 +8,11 @@
   const NODE_W = 140, NODE_H = 32, GAP = 8, FOCUS_GAP = 10;
   const PORT_SPACING = 14;
   const CORNER_R = 6;
-  const LAYER_ORDER = ['app', 'feature', 'core', 'data', 'unknown'];
-  const NODE_COLORS_DARK   = { app:'#7b1212', feature:'#0d3461', core:'#2d0d5e', data:'#0d3318', unknown:'#2a2a2a' };
-  const NODE_BORDERS_DARK  = { app:'#c62828', feature:'#1565c0', core:'#6a1fc2', data:'#2e7d32', unknown:'#555' };
-  const NODE_COLORS_LIGHT  = { app:'#ffcdd2', feature:'#bbdefb', core:'#e1bee7', data:'#c8e6c9', unknown:'#e0e0e0' };
-  const NODE_BORDERS_LIGHT = { app:'#e53935', feature:'#1976d2', core:'#8e24aa', data:'#43a047', unknown:'#999' };
+  const LAYER_ORDER = ['app', 'feature', 'core', 'data', 'test', 'unknown'];
+  const NODE_COLORS_DARK   = { app:'#7b1212', feature:'#0d3461', core:'#2d0d5e', data:'#0d3318', test:'#5e4a0d', unknown:'#2a2a2a' };
+  const NODE_BORDERS_DARK  = { app:'#c62828', feature:'#1565c0', core:'#6a1fc2', data:'#2e7d32', test:'#f9a825', unknown:'#555' };
+  const NODE_COLORS_LIGHT  = { app:'#ffcdd2', feature:'#bbdefb', core:'#e1bee7', data:'#c8e6c9', test:'#fff9c4', unknown:'#e0e0e0' };
+  const NODE_BORDERS_LIGHT = { app:'#e53935', feature:'#1976d2', core:'#8e24aa', data:'#43a047', test:'#f57f17', unknown:'#999' };
   function isLight() { return document.documentElement.classList.contains('light'); }
   function getNodeColors()  { return isLight() ? NODE_COLORS_LIGHT  : NODE_COLORS_DARK; }
   function getNodeBorders() { return isLight() ? NODE_BORDERS_LIGHT : NODE_BORDERS_DARK; }
@@ -50,7 +50,7 @@
     return Math.max(MIN_CLASS_W, maxLen * CHAR_W + 16); // 16 for padding
   }
   const BOX_PAD = 16;
-  // Mutable node positions — initialised from dagre, updated by drag/layout
+  // Mutable node positions — initialized from dagre, updated by drag/layout
   const nodePos      = {};
   // Live <g> element references — updated by drawNodes, used for animation
   const nodeElements = {};
@@ -137,6 +137,8 @@
     inspectionTargetId = null;
     expandedPackages.clear();
     highlightedClassId = null;
+    const detail = document.getElementById('edge-detail');
+    if (detail) detail.innerHTML = '';
     updateInspectButton();
     rerender();
   }
@@ -147,6 +149,8 @@
     inspectionTargetId = targetId;
     expandedPackages.clear();
     highlightedClassId = null;
+    const detail = document.getElementById('edge-detail');
+    if (detail) detail.innerHTML = '';
     rerender();
   }
 
@@ -1722,7 +1726,7 @@
     document.getElementById('depth-slider').addEventListener('input', e => {
       depthValue = parseInt(e.target.value);
       document.getElementById('depth-value').textContent = depthValue;
-      // Re-layout if a node is focused so the new depth neighbourhood is organised
+      // Re-layout if a node is focused so the new depth neighbourhood is organized
       if (focusedId) {
         const visibleIds = getEffectiveVisibleIds();
         const targetPos  = computeCustomSubgraphLayout(focusedId, visibleIds);
@@ -1789,7 +1793,7 @@
     // Set app name in toolbar and page title
     const appTitleEl = document.getElementById('app-title');
     if (appTitleEl) appTitleEl.textContent = `◈ ${APP_NAME}`;
-    document.title = `${APP_NAME} — Simple Dependency Analyser`;
+    document.title = `${APP_NAME} — Simple Dependency Analyzer`;
 
     updateExplorer();
     render();

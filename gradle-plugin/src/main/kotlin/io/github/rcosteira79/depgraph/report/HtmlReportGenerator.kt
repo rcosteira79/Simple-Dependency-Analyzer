@@ -7,7 +7,7 @@ import java.io.File
 
 private val json: Json = Json { prettyPrint = false }
 
-private const val VISUALISATION_RESOURCE_NAME: String = "graph-template.js"
+private const val VISUALIZATION_RESOURCE_NAME: String = "graph-template.js"
 
 object HtmlReportGenerator {
     fun generate(
@@ -16,8 +16,8 @@ object HtmlReportGenerator {
     ) {
         outputFile.parentFile?.mkdirs()
         val graphDataJson: String = escapeForScriptBlock(json.encodeToString(graph))
-        val visualisationJs: String = loadResource(VISUALISATION_RESOURCE_NAME)
-        outputFile.writeText(buildHtml(graphDataJson, visualisationJs))
+        val visualizationJs: String = loadResource(VISUALIZATION_RESOURCE_NAME)
+        outputFile.writeText(buildHtml(graphDataJson, visualizationJs))
     }
 
     private fun escapeForScriptBlock(json: String): String = json.replace("</", "<\\/")
@@ -31,14 +31,14 @@ object HtmlReportGenerator {
 
     private fun buildHtml(
         graphDataJson: String,
-        visualisationJs: String,
+        visualizationJs: String,
     ): String =
         """
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
-          <title>Simple Dependency Analyser</title>
+          <title>Simple Dependency Analyzer</title>
           <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
           <script src="https://cdn.jsdelivr.net/npm/@dagrejs/dagre@1/dist/dagre.min.js"></script>
           <style>
@@ -47,12 +47,14 @@ object HtmlReportGenerator {
               --text: #ccc; --text-dim: #888; --text-faint: #555; --accent: #4fc3f7;
               --btn-bg: #4c5052; --btn-hover: #5c6062;
               --detail-title: #e2e8f0; --detail-sub: #555; --detail-path: #aaa; --detail-hr: #333;
+              --selected-bg: #0d3a5e;
             }
             :root.light {
               --bg: #f5f5f5; --surface: #ffffff; --surface2: #e8e8e8; --border: #ddd;
               --text: #333; --text-dim: #666; --text-faint: #999; --accent: #0288d1;
               --btn-bg: #d0d0d0; --btn-hover: #bbb;
               --detail-title: #1a1a1a; --detail-sub: #888; --detail-path: #444; --detail-hr: #ddd;
+              --selected-bg: #d0e8f7;
             }
             * { box-sizing: border-box; margin: 0; padding: 0; }
             body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 12px; display: flex; flex-direction: column; height: 100vh; }
@@ -70,7 +72,7 @@ object HtmlReportGenerator {
             .ex-section { font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px; padding: 8px 8px 2px; }
             .ex-item { padding: 4px 10px; cursor: pointer; border-left: 2px solid transparent; font-family: monospace; font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
             .ex-item:hover { background: var(--surface2); }
-            .ex-item.selected { background: #0d3a5e; border-left-color: var(--accent); color: var(--accent); }
+            .ex-item.selected { background: var(--selected-bg); border-left-color: var(--accent); color: var(--accent); }
             #graph-container { flex: 1; overflow: hidden; position: relative; }
             #graph-svg { width: 100%; height: 100%; display: block; }
             #detail-wrapper { display: flex; flex-shrink: 0; }
@@ -82,7 +84,7 @@ object HtmlReportGenerator {
         </head>
         <body>
           <div id="toolbar">
-            <span id="app-title" style="font-weight:bold;color:var(--accent)">◈ Simple Dependency Analyser</span>
+            <span id="app-title" style="font-weight:bold;color:var(--accent)">◈ Simple Dependency Analyzer</span>
             <button class="tb-btn" id="btn-reset">↺ Reset</button>
             <button class="tb-btn" id="btn-fit">⤢ Fit</button>
             <button class="tb-btn" id="btn-inspect" disabled style="opacity:0.4">🔍 Inspect</button>
@@ -139,7 +141,7 @@ object HtmlReportGenerator {
             </div>
           </div>
           <script>window.__GRAPH_DATA__ = $graphDataJson;</script>
-          <script>$visualisationJs</script>
+          <script>$visualizationJs</script>
         </body>
         </html>
         """.trimIndent()
