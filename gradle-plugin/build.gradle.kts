@@ -23,8 +23,8 @@ dependencies {
 }
 
 gradlePlugin {
-    website = "https://github.com/rcosteira79/dependency-graph"
-    vcsUrl = "https://github.com/rcosteira79/dependency-graph"
+    website = "https://github.com/rcosteira79/Simple-Dependency-Analyzer"
+    vcsUrl = "https://github.com/rcosteira79/Simple-Dependency-Analyzer"
     plugins {
         create("simpleDependencyAnalyzer") {
             id = "io.github.rcosteira79.simple-dependency-analyzer"
