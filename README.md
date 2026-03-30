@@ -1,14 +1,14 @@
-# Simple Dependency Analyser
+# Simple Dependency Analyzer
 
-A Gradle plugin that generates an interactive, self-contained HTML report visualising your multi-module project's dependency architecture — from module-level overview down to individual class dependencies.
+A Gradle plugin that generates an interactive, self-contained HTML report visualizing your multi-module project's dependency architecture. It doesn't just show you which modules depend on each other — it shows you *why*, by tracing module-level edges down to the exact classes involved.
 
-<!-- TODO: Add hero screenshot here — full graph view, dark theme -->
+![Hero — full graph view, dark theme](docs/hero-dark.png)
 
 ## Features
 
 ### Module Graph
 
-<!-- TODO: Screenshot — module graph with focused module, dependencies below, dependents above -->
+![Module graph — focused module with dependencies below, dependents above](docs/module-graph-focused.png)
 - **Automatic module type detection** — app, feature, core, data modules are color-coded based on applied plugins and naming conventions
 - **Focus mode** — click a module to focus on its neighborhood; dependencies are placed below, dependents above
 - **Depth control** — slider to adjust how many layers of dependencies are visible
@@ -17,7 +17,7 @@ A Gradle plugin that generates an interactive, self-contained HTML report visual
 
 ### Class-Level Inspection
 
-<!-- TODO: Screenshot — inspection mode with bounding box showing USED FROM / PROVIDED TO zones -->
+![Class-level inspection — USED FROM / PROVIDED TO zones](docs/class-inspection.png)
 - **Bytecode analysis** — scans compiled `.class` files using ASM to discover actual class references
 - **Kotlin inline function detection** — parses SMAP debug info to find dependencies through inlined code
 - **Relationship-focused inspection** — right-click a module to inspect it, then click another module to see exactly which classes are involved in the dependency
@@ -25,9 +25,9 @@ A Gradle plugin that generates an interactive, self-contained HTML report visual
 - **Detail panel** — click a class to see full dependency details including which classes use it or are used by it
 - **Inline dependency markers** — dependencies through Kotlin inline functions are visually distinguished with dashed borders and "(inline)" tags
 
-### Visualisation Controls
+### Visualization Controls
 
-<!-- TODO: Screenshot — light theme with transitive dependencies enabled -->
+![Light theme with transitive dependencies](docs/light-theme-transitive.png)
 - **Dark / Light theme** — toggle between themes; all graph elements adapt
 - **PNG export** — export the current view at 2x resolution with context-aware filenames
 - **Layout modes** — switch between Flat (BFS) and Deep (longest-path) subgraph layouts
@@ -52,7 +52,7 @@ In your project's `settings.gradle.kts`:
 
 ```kotlin
 pluginManagement {
-    includeBuild("/path/to/simple-dependency-analyser/gradle-plugin")
+    includeBuild("/path/to/simple-dependency-analyzer/gradle-plugin")
 }
 ```
 
@@ -60,7 +60,7 @@ In your root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("io.github.rcosteira79.simple-dependency-analyser")
+    id("io.github.rcosteira79.simple-dependency-analyzer")
 }
 ```
 
@@ -88,7 +88,7 @@ And in your root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    id("io.github.rcosteira79.simple-dependency-analyser") version "1.0.0"
+    id("io.github.rcosteira79.simple-dependency-analyzer") version "1.0.0"
 }
 ```
 
