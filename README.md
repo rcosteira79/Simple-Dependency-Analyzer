@@ -50,14 +50,14 @@ Add to your `gradle/libs.versions.toml`:
 
 ```toml
 [plugins]
-simple-dependency-analyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.2.0" }
+simpleDependencyAnalyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.2.0" }
 ```
 
 Then in your root `build.gradle.kts`:
 
 ```kotlin
 plugins {
-    alias(libs.plugins.simple.dependency.analyzer)
+    alias(libs.plugins.simpleDependencyAnalyzer)
 }
 ```
 
