@@ -50,7 +50,7 @@ Add to your `gradle/libs.versions.toml`:
 
 ```toml
 [plugins]
-simple-dependency-analyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.1.0" }
+simple-dependency-analyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.2.0" }
 ```
 
 Then in your root `build.gradle.kts`:
@@ -115,7 +115,7 @@ plugins {
 ## Compatibility
 
 - **Gradle** 8.0+
-- **JDK** 11+
+- **JDK** 17+
 - **AGP** any version (optional — works with pure JVM/KMP projects too)
 
 No Android Studio dependency — the plugin runs entirely from the Gradle CLI.
