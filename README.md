@@ -50,7 +50,7 @@ Add to your `gradle/libs.versions.toml`:
 
 ```toml
 [plugins]
-simple-dependency-analyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.0.0" }
+simple-dependency-analyzer = { id = "io.github.rcosteira79.simple-dependency-analyzer", version = "1.1.0" }
 ```
 
 Then in your root `build.gradle.kts`:
