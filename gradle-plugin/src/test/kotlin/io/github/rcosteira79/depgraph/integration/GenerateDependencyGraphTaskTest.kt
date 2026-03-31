@@ -33,7 +33,7 @@ class GenerateDependencyGraphTaskTest {
 
         assertEquals(TaskOutcome.SUCCESS, actualResult.task(":generateDependencyGraph")?.outcome)
 
-        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraphJson: File = File(tempDir.toFile(), "build/simple-dependency-analyzer/graph.json")
         assertTrue(actualGraphJson.exists(), "graph.json should exist")
 
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
@@ -64,7 +64,7 @@ class GenerateDependencyGraphTaskTest {
             .withArguments("generateDependencyGraph")
             .build()
 
-        val actualHtmlFile: File = File(tempDir.toFile(), "build/dep-graph/index.html")
+        val actualHtmlFile: File = File(tempDir.toFile(), "build/simple-dependency-analyzer/index.html")
         assertTrue(actualHtmlFile.exists(), "index.html should exist")
         assertTrue(actualHtmlFile.readText().contains("window.__GRAPH_DATA__"))
     }
@@ -82,7 +82,7 @@ class GenerateDependencyGraphTaskTest {
             .withArguments("generateDependencyGraph", "--stacktrace")
             .build()
 
-        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraphJson: File = File(tempDir.toFile(), "build/simple-dependency-analyzer/graph.json")
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
 
         assertEquals(2, actualGraph["schemaVersion"]?.jsonPrimitive?.content?.toInt())
@@ -106,7 +106,7 @@ class GenerateDependencyGraphTaskTest {
             .withArguments("generateDependencyGraph", "--stacktrace")
             .build()
 
-        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraphJson: File = File(tempDir.toFile(), "build/simple-dependency-analyzer/graph.json")
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
         val actualClassData: JsonObject = actualGraph["classData"]!!.jsonObject
 
@@ -142,7 +142,7 @@ class GenerateDependencyGraphTaskTest {
             .withArguments("generateDependencyGraph", "-PmodulesOnly=true", "--stacktrace")
             .build()
 
-        val actualGraphJson: File = File(tempDir.toFile(), "build/dep-graph/graph.json")
+        val actualGraphJson: File = File(tempDir.toFile(), "build/simple-dependency-analyzer/graph.json")
         val actualGraph: JsonObject = Json.parseToJsonElement(actualGraphJson.readText()).jsonObject
 
         // classData should be absent (null → omitted from JSON)

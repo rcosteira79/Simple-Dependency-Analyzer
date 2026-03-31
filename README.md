@@ -105,6 +105,14 @@ plugins {
 
 </details>
 
+## Compatibility
+
+- **Gradle** 8.0+
+- **JDK** 11+
+- **AGP** any version (optional — works with pure JVM/KMP projects too)
+
+No Android Studio dependency — the plugin runs entirely from the Gradle CLI.
+
 ## Usage
 
 ### Full analysis (with class-level inspection)
@@ -113,7 +121,7 @@ plugins {
 ./gradlew generateDependencyGraph
 ```
 
-This compiles all modules and scans the bytecode. The report is generated at `build/dep-graph/index.html` with a clickable `file://` link printed in the terminal.
+This compiles all modules and scans the bytecode. The report is generated at `build/simple-dependency-analyzer/index.html` with a clickable `file://` link printed in the terminal.
 
 ### Module-level only (fast, no compilation)
 

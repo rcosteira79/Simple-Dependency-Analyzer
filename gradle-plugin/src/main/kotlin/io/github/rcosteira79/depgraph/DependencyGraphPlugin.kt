@@ -7,7 +7,7 @@ import org.gradle.api.Project
 private const val TASK_NAME: String = "generateDependencyGraph"
 private const val TASK_GROUP: String = "reporting"
 private const val TASK_DESCRIPTION: String = "Generates the Simple Dependency Analyzer report"
-private const val OUTPUT_DIR_NAME: String = "dep-graph"
+private const val OUTPUT_DIR_NAME: String = "simple-dependency-analyzer"
 private const val MODULES_ONLY_PROPERTY: String = "modulesOnly"
 
 class DependencyGraphPlugin : Plugin<Project> {
