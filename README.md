@@ -46,7 +46,18 @@ A Gradle plugin that generates an interactive, self-contained HTML report visual
 
 ## Setup
 
-### Using `includeBuild` (recommended for development)
+In your root `build.gradle.kts`:
+
+```kotlin
+plugins {
+    id("io.github.rcosteira79.simple-dependency-analyzer") version "1.0.0"
+}
+```
+
+<details>
+<summary>Development setup (building from source)</summary>
+
+### Using `includeBuild`
 
 In your project's `settings.gradle.kts`:
 
@@ -91,6 +102,8 @@ plugins {
     id("io.github.rcosteira79.simple-dependency-analyzer") version "1.0.0"
 }
 ```
+
+</details>
 
 ## Usage
 
